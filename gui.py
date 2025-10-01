@@ -32,34 +32,44 @@ screen.fill((53,101,77))
 session = game.Game.simulationInit()
 running = True
 hand = []
-turned_card = CardSprite(HIDDEN_CARD, SCREEN_WIDTH*4/5, SCREEN_HEIGHT/2-CARD_HEIGHT/2)
+turned_card = CardSprite(HIDDEN_CARD, SCREEN_WIDTH*5/6, SCREEN_HEIGHT/2-CARD_HEIGHT/2)
 enemy_hand = []
-briscola = CardSprite(session.briscola, SCREEN_WIDTH*4/5-CARD_HEIGHT/4*3, SCREEN_HEIGHT/2-CARD_WIDTH/2, orizzontale=True)
+briscola = CardSprite(session.briscola, SCREEN_WIDTH*5/6-CARD_HEIGHT/4*3, SCREEN_HEIGHT/2-CARD_WIDTH/2, orizzontale=True)
+card1 = None
+card2 = None
+hand = []
+enemy_hand = []
+player1 = session.players[0]
+player2 = session.players[1]
+for n, card in enumerate(session.players[0].hand):
+    hand.append(CardSprite(card, 250+100*n, SCREEN_HEIGHT-0.8*CARD_HEIGHT))
+
+for n, card in enumerate(session.players[1].hand):
+    enemy_hand.append(CardSprite(HIDDEN_CARD, 250+100*n, -0.2*CARD_HEIGHT))
 while running:
-    hand = []
-    enemy_hand = []
-    move = None
+    
+    if (session.turno == 1 or card1 != None) and card2 == None:
+        pygame.time.wait(300)
+        card2 = session.players[1].hand[session.players[1].randmove()] 
+
+
     for event in pygame.event.get():
-        if event.type == pygame.KEYDOWN:
+        if event.type == pygame.KEYDOWN and card1 == None:
             if event.key == pygame.K_1:
-                move = 0
+                card1 = player1.hand.pop(0)
             if event.key == pygame.K_2:
                 if len(hand) > 1:
-                    move = 1
+                    card1 = player1.hand.pop(1)
             if event.key == pygame.K_3:
                 if len(hand) > 2:
-                    move = 2
+                    card1 = player1.pop(2)
 
         if event.type == pygame.QUIT:  # Close window
             running = False
 
     # Fill screen with black
     
-    for n, card in enumerate(session.players[0].hand):
-        hand.append(CardSprite(card, 250+100*n, SCREEN_HEIGHT-0.8*CARD_HEIGHT))
-    
-    for n, card in enumerate(session.players[1].hand):
-        enemy_hand.append(CardSprite(HIDDEN_CARD, 250+100*n, -0.2*CARD_HEIGHT))
+
 
     for n, card_sprite in enumerate(hand):
         screen.blit(card_sprite.image, card_sprite.rect.topleft)
@@ -74,8 +84,13 @@ while running:
     if len(session.deck) >= 2:
         screen.blit(turned_card.image, turned_card.rect.topleft)
     
+    if card1:
+        card1sprite = CardSprite(card1, SCREEN_WIDTH/2-CARD_WIDTH*1.5, SCREEN_HEIGHT/2-CARD_HEIGHT/2)
+        screen.blit(card1sprite.image, card1sprite.rect.topleft)
 
-
+    if card2:
+        card2sprite = CardSprite(card2, SCREEN_WIDTH/2-CARD_WIDTH*0.2, SCREEN_HEIGHT/2-CARD_HEIGHT/2)
+        screen.blit(card2sprite.image, card2sprite.rect.topleft)
 
 
     # Update display
