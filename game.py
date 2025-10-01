@@ -1,8 +1,6 @@
+from config import *
 import random, copy
 
-SEEDS = ("B", "S", "C", "D")
-SEED_NAMES = {"B":"Bastoni", "S":"Spade", "C":"Coppe", "D":"Denari"}
-VALUES = {1:11, 2:0, 3:10, 4:0, 5:0, 6:0, 7:0, 8:2, 9:3, 10:4} # Valori carte a briscola
 
 # Creazione mazzo base
 DECK = []
@@ -50,6 +48,8 @@ class Game:
             game.players[1].hand.append(game.deck.pop(0))
         
         game.briscola = game.deck[-1]
+        game.on_table = [None, None]
+        game.turno = 0
         return game
     
     def compare_hands(self, card1, card2):
@@ -71,11 +71,21 @@ class Game:
             else:
                 return 1
 
+    def check_finished(self):
+        if not self.players[0].hand and not self.players[1].hand:
+            return True
+        else:
+            return False
+
+    def draw(self):
+        if len(self.deck) :
+                self.players[self.turno].hand.append(self.deck.pop(0))
+                self.players[1-self.turno].hand.append(self.deck.pop(0))
+
     def mainloop(self):
-        turno = 0
-        while len(self.players[turno].hand):
-            player1 = self.players[turno]
-            player2 = self.players[1-turno]
+        while not self.check_finished():
+            player1 = self.players[self.turno]
+            player2 = self.players[1-self.turno]
             move1 = player1.randmove()
             if move1 >= len(player1.hand):
                 return 1
@@ -85,17 +95,16 @@ class Game:
                 return 0
             card2 = player2.hand.pop(move2)
             relative_hand_winner = self.compare_hands(card1, card2)
-            if turno == 0: 
+            if self.turno == 0: 
                 hand_winner = relative_hand_winner
             else:
                 hand_winner = 1 - relative_hand_winner
 
-            turno = hand_winner
+            self.turno = hand_winner
+            self.draw()
 
             self.players[hand_winner].taken += (card1, card2)
-            if len(self.deck) :
-                self.players[hand_winner].hand.append(self.deck.pop(0))
-                self.players[1-hand_winner].hand.append(self.deck.pop(0))
+            
                 
         count1 = self.players[0].count_points()
         count2 = self.players[1].count_points()
@@ -105,19 +114,18 @@ class Game:
             return 1
         else:
             return -1
-            
-winner1 = 0
-winner2 = 0
-draws = 0
-for x in range(100000):
-    game = Game.simulationInit()
-    winner = game.mainloop()
-    if winner== 0:
-        winner1 += 1
-    elif winner == 1:
-        winner2 += 1
-    else:
-        draws += 1
-print(f"Winner 1: {winner1}, Winner 2: {winner2}, draws: {draws}")
 
-        
+if __name__ == "__main__":           
+    winner1 = 0
+    winner2 = 0
+    draws = 0
+    for x in range(10000):
+        game = Game.simulationInit()
+        winner = game.mainloop()
+        if winner== 0:
+            winner1 += 1
+        elif winner == 1:
+            winner2 += 1
+        else:
+            draws += 1
+    print(f"Winner 1: {winner1}, Winner 2: {winner2}, draws: {draws}")
