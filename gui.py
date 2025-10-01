@@ -16,7 +16,7 @@ clock = pygame.time.Clock()
 class CardSprite(pygame.sprite.Sprite):
     def __init__(self, card, x , y, orizzontale = False):
         super().__init__()
-        self.image = pygame.transform.scale(pygame.image.load(f"imgs/{card[1]}{card[0]}.jpg").convert_alpha(), (CARD_WIDTH, CARD_HEIGHT))
+        self.image = pygame.transform.smoothscale(pygame.image.load(f"imgs/{card[1]}{card[0]}.jpg").convert_alpha(), (CARD_WIDTH, CARD_HEIGHT))
         if orizzontale:
             self.image = pygame.transform.rotate(self.image, 90)
         self.rect = self.image.get_rect(topleft=(x, y))
