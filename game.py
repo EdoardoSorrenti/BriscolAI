@@ -56,10 +56,13 @@ class Game:
         seme1, num1 = card1[0], card1[1]
         seme2, num2 = card2[0], card2[1]
         briscola = self.briscola[0]
-        if seme1 != seme2 and seme2 != briscola:
-            return 0
-        elif seme1 != seme2 and seme2 == briscola:
-            return 1
+        if seme1 != seme2:
+            if seme1 == briscola:
+                return 0
+            elif seme2 == briscola:
+                return 1
+            else:
+                return self.turno
         elif seme1 == seme2:
             if VALUES[num1] > VALUES[num2]:
                 return 0
@@ -77,35 +80,7 @@ class Game:
         else:
             return False
 
-    def draw(self):
-        if len(self.deck) :
-                self.players[self.turno].hand.append(self.deck.pop(0))
-                self.players[1-self.turno].hand.append(self.deck.pop(0))
-
-    def mainloop(self):
-        while not self.check_finished():
-            player1 = self.players[self.turno]
-            player2 = self.players[1-self.turno]
-            move1 = player1.randmove()
-            if move1 >= len(player1.hand):
-                return 1
-            card1 = player1.hand.pop(move1)
-            move2 = player2.randmove(card1)
-            if move2 >= len(player2.hand):
-                return 0
-            card2 = player2.hand.pop(move2)
-            relative_hand_winner = self.compare_hands(card1, card2)
-            if self.turno == 0: 
-                hand_winner = relative_hand_winner
-            else:
-                hand_winner = 1 - relative_hand_winner
-
-            self.turno = hand_winner
-            self.draw()
-
-            self.players[hand_winner].taken += (card1, card2)
-            
-                
+    def check_winner(self):
         count1 = self.players[0].count_points()
         count2 = self.players[1].count_points()
         if count1 > count2:
@@ -114,6 +89,31 @@ class Game:
             return 1
         else:
             return -1
+
+    def draw(self):
+        if len(self.deck):
+                self.players[self.turno].hand.append(self.deck.pop(0))
+                self.players[1-self.turno].hand.append(self.deck.pop(0))
+
+    def mainloop(self):
+        while not self.check_finished():
+            player1 = self.players[0]
+            player2 = self.players[1]
+            if self.turno == 0:
+                card1 = player1.hand.pop(player1.randmove())
+                card2 = player2.hand.pop(player2.randmove(card1))
+            else:
+                card2 = player2.hand.pop(player2.randmove())
+                card1 = player1.hand.pop(player1.randmove(card2))
+            winner = self.compare_hands(card1, card2)
+
+            self.turno = winner
+            self.draw()
+
+            self.players[winner].taken += (card1, card2)
+            
+                
+        return self.check_winner()
 
 if __name__ == "__main__":           
     winner1 = 0
