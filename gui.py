@@ -1,10 +1,12 @@
 import pygame, sys
 import game
 
+"""Test features"""
 SMALL_DECK = False
 WAITS = True
 CARTE_SCOPERTE = False
 
+"""Pygame parameters"""
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 
@@ -13,6 +15,7 @@ CARD_HEIGHT = 150
 
 SMALL_FONT = 32
 
+"""Hidden Card filename"""
 HIDDEN_CARD = ("Z",0)
 
 pygame.init()
