@@ -10,12 +10,22 @@ VALUES_TENSOR = torch.tensor([11,0,10,0,0,0,0,2,3,4]*4, dtype=torch.float32)
 DECK = list(range(40)) # 1-40
 
 class Game:
+    def __init__(self):
+        """Initializes tensors for an empty game."""
+        self.hands = [torch.zeros(40, dtype=torch.float32), torch.zeros(40, dtype=torch.float32)] # Carte in mano
+        self.taken = [torch.zeros(40, dtype=torch.float32), torch.zeros(40, dtype=torch.float32)] # Carte prese
+        self.briscola_card = torch.zeros(40, dtype=torch.float32) # Carta di briscola
+
+        self.on_table = torch.zeros(40, dtype=torch.float32) # Carte sul tavolo
     
     def reset(self, turno=0):
         """Resets the game to initial state."""
-        self.hands = [torch.zeros(40, dtype=torch.float32), torch.zeros(40, dtype=torch.float32)]
-        self.taken = [torch.zeros(40, dtype=torch.float32), torch.zeros(40, dtype=torch.float32)]
-        self.briscola_card = torch.zeros(40, dtype=torch.float32)
+        self.hands[0].zero_()
+        self.hands[1].zero_()
+        self.taken[0].zero_()
+        self.taken[1].zero_()
+        self.briscola_card.zero_()
+        self.on_table.zero_()
 
         self.deck = copy.copy(DECK)
         random.shuffle(self.deck)
@@ -25,7 +35,6 @@ class Game:
 
         self.briscola = self.deck[0]
         self.briscola_card[self.briscola] = 1
-        self.on_table = torch.zeros(40, dtype=torch.float32)
         self.turno = turno  # Player to play first, 0 or 1
     
     def compare_hands(self, card1, card2):
