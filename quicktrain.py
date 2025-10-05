@@ -8,9 +8,23 @@ batch_size = 3300
 learning_rate = 3e-3
 gamma = 1.0  # No discounting
 
+save_path = 'models/briscolai_model.pth'
+
 log_freq = 1
 
-model = PolicyNetwork()
+model= PolicyNetwork()
+
+try:
+    model.load_state_dict(torch.load(save_path))
+    print(f"Loaded model from {save_path}")
+except FileNotFoundError:
+    print(f"No saved model found at {save_path}, starting fresh.")
+
+try:
+    model = torch.compile(model, fullgraph=False, backend="eager")
+except Exception as e:
+    print(f"Warning: torch.compile failed with error {e}, continuing without it.")
+
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 def card_to_onehot(card):
@@ -119,8 +133,8 @@ def train_model(batches, batch_size):
         print("Training interrupted. Saving model...")
 
     # Save the model
-    torch.save(model.state_dict(), 'briscolai_model.pth')
-    print("Model saved to briscolai_model.pth")
+    torch.save(model._orig_mod.state_dict(), save_path)
+    print(f"Model saved to {save_path}")
 
 if __name__ == '__main__':
     train_model(batches, batch_size)
