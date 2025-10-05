@@ -4,27 +4,33 @@ Runs ITERATIONS randomly played games
 Results should roughly be: P1 52.7%; P2 45.6%; DRAW: 1.7%
 """
 
+import random
 from game import Game
 from time import time
 
 ITERATIONS = 100_000
 
+def randmove(hand):
+    """Produce valid randomized moves."""
+    if len(hand) <= 1:
+        return 0
+    return random.randint(0, len(hand)-1)
+
+
 def randloop(session):
     """Plays a whole game with both players playing random moves."""
-    player1 = session.players[0]
-    player2 = session.players[1]
     while not session.check_finished():
         if session.turno == 0:
-            card1 = player1.hand.pop(player1.randmove())
-            card2 = player2.hand.pop(player2.randmove(card1))
+            card1 = session.hands[0].pop(randmove(session.hands[0]))
+            card2 = session.hands[1].pop(randmove(session.hands[1]))
         else:
-            card2 = player2.hand.pop(player2.randmove())
-            card1 = player1.hand.pop(player1.randmove(card2))
+            card2 = session.hands[1].pop(randmove(session.hands[1]))
+            card1 = session.hands[0].pop(randmove(session.hands[0]))
         winner = session.compare_hands(card1, card2)
         session.turno = winner
         session.draw()
-        session.players[winner].taken += (card1, card2)
-        
+        session.taken[winner] += (card1, card2)
+
     return session.check_winner()
 
 def testloops(n_its):
@@ -33,8 +39,9 @@ def testloops(n_its):
     winner2 = 0
     draws = 0
     start_time = time()
+    game = Game()
     for x in range(n_its):
-        game = Game.simulationInit()
+        game.reset()
         winner = randloop(game)
         if winner== 0:
             winner1 += 1

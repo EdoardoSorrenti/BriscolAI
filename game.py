@@ -11,51 +11,23 @@ VALUES = {1:11, 2:0, 3:10, 4:0, 5:0, 6:0, 7:0, 8:2, 9:3, 10:4} # Valori carte a 
 DECK = []
 for seed in SEEDS:
     for num in range(1,11):
-        DECK.append((seed, num))
-
-class Player:
-    def __init__(self):
-        self.hand = []
-        self.taken = []
-
-    def randmove(self, othercard = None):
-        """Produce valid randomized moves."""
-        if len(self.hand) <= 1:
-            return 0
-        return random.randint(0, len(self.hand)-1)
-
-    
-    def manualmove(self, othercard = None):
-        """Allow for basic interaction with the game through CLI."""
-        if othercard:
-            print(f"L'avversario ha giocato un {othercard[1]} di {SEED_NAMES[othercard[0]]}")
-        print(f"Hai a disposizione: {self.hand}, scegli la carta (0-2)")
-        carta = int(input())
-        return carta
-    
-    def count_points(self):
-        """Returns the player's current point count."""
-        points = 0
-        for card in self.taken:
-            points += VALUES[card[1]]
-        return points
+        DECK.append((seed, num))    
 
 class Game:
-    @staticmethod
-    def simulationInit():
-        """Returns a Game instance with a randomly shuffled deck."""
-        game = Game()
-        game.players = [Player(), Player()]
-        game.deck = copy.deepcopy(DECK)
-        random.shuffle(game.deck)
+    
+    def reset(self):
+        """Resets the game to initial state."""
+        self.hands = [[], []]
+        self.taken = [[], []]
+        self.deck = copy.deepcopy(DECK)
+        random.shuffle(self.deck)
         for x in range(3):
-            game.players[0].hand.append(game.deck.pop(0))
-            game.players[1].hand.append(game.deck.pop(0))
-        
-        game.briscola = game.deck[-1]
-        game.on_table = [None, None]
-        game.turno = 0
-        return game
+            self.hands[0].append(self.deck.pop(0))
+            self.hands[1].append(self.deck.pop(0))
+
+        self.briscola = self.deck[-1]
+        self.on_table = [None, None]
+        self.turno = 0
     
     def compare_hands(self, card1, card2):
         """Compares cards played by P1 and P2,
@@ -81,18 +53,27 @@ class Game:
                     return 1
             else:
                 return 1
+            
+    def count_points(self):
+        """Returns the player's current point count."""
+        points1 = 0
+        for card in self.taken[0]:
+            points1 += VALUES[card[1]]
+        points2 = 0
+        for card in self.taken[1]:
+            points2 += VALUES[card[1]]
+        return points1, points2
 
     def check_finished(self):
         """Returns wether the game is over."""
-        if not self.players[0].hand and not self.players[1].hand:
+        if not self.hands[0] and not self.hands[1]:
             return True
         else:
             return False
 
     def check_winner(self):
         """Returns index of the player with currently more points, -1 if draw."""
-        count1 = self.players[0].count_points()
-        count2 = self.players[1].count_points()
+        count1, count2 = self.count_points()
         if count1 > count2:
             return 0
         elif count2 > count1: 
@@ -103,7 +84,5 @@ class Game:
     def draw(self):
         """If available makes all players draw a card."""
         if len(self.deck):
-                self.players[self.turno].hand.append(self.deck.pop(0))
-                self.players[1-self.turno].hand.append(self.deck.pop(0))
-
-
+                self.hands[self.turno].append(self.deck.pop(0))
+                self.hands[1-self.turno].append(self.deck.pop(0))
