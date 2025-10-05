@@ -15,8 +15,8 @@ CARD_HEIGHT = 150
 
 SMALL_FONT = 32
 
-"""Hidden Card filename"""
-HIDDEN_CARD = ("Z",0)
+"""Hidden Card ID"""
+HIDDEN_CARD = 9
 
 def randmove(hand):
     """Produce valid randomized moves."""
@@ -24,13 +24,16 @@ def randmove(hand):
         return 0
     return random.randint(0, len(hand)-1)
 
+seeds = ("H","B", "S", "C", "D") # Hidden, Bastoni, Spade, Coppe, Denari
+
 pygame.init()
 clock = pygame.time.Clock()
 
 class CardSprite(pygame.sprite.Sprite):
     def __init__(self, card, x , y, orizzontale = False):
+        seed = seeds[card//10]
         super().__init__()
-        self.image = pygame.transform.smoothscale(pygame.image.load(f"imgs/{card[1]}{card[0]}.jpg").convert_alpha(), (CARD_WIDTH, CARD_HEIGHT))
+        self.image = pygame.transform.smoothscale(pygame.image.load(f"imgs/{card % 10 + 1}{seed}.jpg").convert_alpha(), (CARD_WIDTH, CARD_HEIGHT))
         if orizzontale:
             self.image = pygame.transform.rotate(self.image, 90)
         self.rect = self.image.get_rect(topleft=(x, y))
@@ -95,8 +98,8 @@ while running:
 
     screen.blit(font.render(f"P2: {score2} pts", True, (255,255,255)), (50,20))
     screen.blit(font.render(f"P1: {score1} pts", True, (255,255,255)), (50,SCREEN_HEIGHT-50))
-    
-    if (session.turno == 1 or card1 != None) and card2 == None:
+
+    if (session.turno == 1 or card1) and not card2:
         move = randmove(session.hands[1])
         card2 = session.hands[1].pop(move)
         enemy_hand.pop(move)
@@ -168,7 +171,7 @@ while running:
         else:
             screen.blit(font.render(f"DRAW!", True, (255,255,255)), (SCREEN_WIDTH/2, SCREEN_HEIGHT/2))
         pygame.display.flip()
-        wait = 1000
+        wait = 5000
         running = False
 
         
