@@ -65,14 +65,14 @@ class Game:
             return False
 
     def check_winner(self):
-        """Returns index of the player with currently more points, -1 if draw."""
+        """Returns index of the player with currently more points, 2 if draw."""
         count1, count2 = self.count_points()
         if count1 > count2:
             return 0
         elif count2 > count1: 
             return 1
         else:
-            return -1
+            return 2
 
     def draw(self):
         """If available makes all players draw a card."""

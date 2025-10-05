@@ -23,24 +23,17 @@ def fastloop(session):
 
 def testloops(n_its):
     """Runs n_its iterations and prints the result and average speed"""
-    winner1 = 0
-    winner2 = 0
-    draws = 0
     start_time = time()
     game = Game()
+    outcomes = [0, 0, 0]  # Wins for player 1, player 2, draws
     for x in range(n_its):
         game.reset()
         winner = fastloop(game)
-        if winner== 0:
-            winner1 += 1
-        elif winner == 1:
-            winner2 += 1
-        else:
-            draws += 1
+        outcomes[winner] += 1
     end_time = time()
     tot_time = end_time - start_time
     games_per_second = n_its / tot_time
-    print(f"Winner 1: {winner1/n_its*100:.1f}%, Winner 2: {winner2/n_its*100:.1f}%, draws: {draws/n_its*100:.1f}%")
+    print(f"Winner 1: {outcomes[0]/n_its*100:.1f}%, Winner 2: {outcomes[1]/n_its*100:.1f}%, draws: {outcomes[2]/n_its*100:.1f}%")
     print(f"Compute speed: {round(games_per_second)} games/second")
 
 if __name__ == "__main__":

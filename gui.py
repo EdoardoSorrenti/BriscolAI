@@ -166,8 +166,8 @@ while running:
         winner = session.check_winner()
         screen.fill((53,101,77))
         score1, score2 = session.count_points()
-        if winner != -1:
-            screen.blit(font.render(f"Player {winner+1} wins, {score1}-{score2}", True, (255,255,255)), (SCREEN_WIDTH/2, SCREEN_HEIGHT/2))
+        if winner != 2:
+            screen.blit(font.render(f"Player {winner+1} wins, {score1}-{score2}", True, (255,255,255)), (SCREEN_WIDTH/4, SCREEN_HEIGHT/2))
         else:
             screen.blit(font.render(f"DRAW!", True, (255,255,255)), (SCREEN_WIDTH/2, SCREEN_HEIGHT/2))
         pygame.display.flip()
