@@ -1,5 +1,5 @@
 import pygame, sys
-import game
+import game, random
 
 """Test features"""
 SMALL_DECK = False
@@ -17,6 +17,12 @@ SMALL_FONT = 32
 
 """Hidden Card filename"""
 HIDDEN_CARD = ("Z",0)
+
+def randmove(hand):
+    """Produce valid randomized moves."""
+    if len(hand) <= 1:
+        return 0
+    return random.randint(0, len(hand)-1)
 
 pygame.init()
 clock = pygame.time.Clock()
@@ -64,57 +70,52 @@ font = pygame.font.Font(None, SMALL_FONT)
 
 screen.fill((53,101,77))
     
-session = game.Game.simulationInit()
+session = game.Game()
+session.reset()
 
 if SMALL_DECK:
     session.deck = session.deck[32:]
 
 running = True
 hand = []
-turned_card = CardSprite(HIDDEN_CARD, SCREEN_WIDTH*5/6, SCREEN_HEIGHT/2-CARD_HEIGHT/2)
 enemy_hand = []
+turned_card = CardSprite(HIDDEN_CARD, SCREEN_WIDTH*5/6, SCREEN_HEIGHT/2-CARD_HEIGHT/2)
 briscola = CardSprite(session.briscola, SCREEN_WIDTH*5/6-CARD_HEIGHT/4*3, SCREEN_HEIGHT/2-CARD_WIDTH/2, orizzontale=True)
 card1 = None
 card2 = None
-player1 = session.players[0]
-player2 = session.players[1]
-hand, enemy_hand = drawCards(player1.hand, player2.hand)
+hand, enemy_hand = drawCards(session.hands[0], session.hands[1])
 wait = 0
+
 
 
 while running:
     screen.fill((53,101,77))        
 
-    score1 = player1.count_points()
-    score2 = player2.count_points()
+    score1, score2 = session.count_points()
 
     screen.blit(font.render(f"P2: {score2} pts", True, (255,255,255)), (50,20))
     screen.blit(font.render(f"P1: {score1} pts", True, (255,255,255)), (50,SCREEN_HEIGHT-50))
     
     if (session.turno == 1 or card1 != None) and card2 == None:
-        move = player2.randmove()
-        card2 = player2.hand.pop(move)
+        move = randmove(session.hands[1])
+        card2 = session.hands[1].pop(move)
         enemy_hand.pop(move)
-        card2sprite = CardSprite(card2, SCREEN_WIDTH/2-CARD_WIDTH*0.2, SCREEN_HEIGHT/2-CARD_HEIGHT/2)
-        screen.blit(card2sprite.image, card2sprite.rect.topleft)
-        
-        
-        
+        card2sprite = CardSprite(card2, SCREEN_WIDTH/2-CARD_WIDTH*0.2, SCREEN_HEIGHT/2-CARD_HEIGHT/2)        
 
 
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN and card1 == None:
             if not card1:
                 if event.key == pygame.K_1:
-                    card1 = player1.hand.pop(0)
+                    card1 = session.hands[0].pop(0)
                     hand.pop(0)
                 if event.key == pygame.K_2:
                     if len(hand) > 1:
-                        card1 = player1.hand.pop(1)
+                        card1 = session.hands[0].pop(1)
                         hand.pop(1)
                 if event.key == pygame.K_3:
                     if len(hand) > 2:
-                        card1 = player1.hand.pop(2)
+                        card1 = session.hands[0].pop(2)
                         hand.pop(2)
 
         if event.type == pygame.QUIT:  # Close window
@@ -124,7 +125,7 @@ while running:
     for n, card_sprite in enumerate(hand):
         screen.blit(card_sprite.image, card_sprite.rect.topleft)
     for n in range(3):
-        if len(player1.hand) >= n+1 or len(session.deck)>0:
+        if len(session.hands[0]) >= n+1 or len(session.deck)>0:
             screen.blit(font.render(f"{n+1}", True, (255,255,255)), (250+100*n+CARD_WIDTH/2-SMALL_FONT/2, SCREEN_HEIGHT-CARD_HEIGHT))
         
     for card_sprite in enemy_hand:
@@ -149,21 +150,21 @@ while running:
         if WAITS:
             wait = 600
         winner = session.compare_hands(card1, card2)
-        session.players[winner].taken += (card1, card2)
+        session.taken[winner] += (card1, card2)
         session.turno = winner
         card1= None
         card2 = None
 
 
         session.draw()
-        hand, enemy_hand = drawCards(player1.hand, player2.hand)
+        hand, enemy_hand = drawCards(session.hands[0], session.hands[1])
 
     if session.check_finished():
         winner = session.check_winner()
         screen.fill((53,101,77))
+        score1, score2 = session.count_points()
         if winner != -1:
-            screen.blit(font.render(f"Player {winner+1} wins, {session.players[winner].count_points()}-{session.players[1-winner].count_points()}", True, (255,255,255)), (SCREEN_WIDTH/2, SCREEN_HEIGHT/2))
-            print(f"Player {winner+1} wins")
+            screen.blit(font.render(f"Player {winner+1} wins, {score1}-{score2}", True, (255,255,255)), (SCREEN_WIDTH/2, SCREEN_HEIGHT/2))
         else:
             screen.blit(font.render(f"DRAW!", True, (255,255,255)), (SCREEN_WIDTH/2, SCREEN_HEIGHT/2))
         pygame.display.flip()
