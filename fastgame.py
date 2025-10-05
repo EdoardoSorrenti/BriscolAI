@@ -4,7 +4,6 @@ Runs ITERATIONS randomly played games
 Results should roughly be: P1 52.7%; P2 45.6%; DRAW: 1.7%
 """
 
-import random
 from game import Game
 from time import time
 
