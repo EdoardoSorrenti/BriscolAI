@@ -3,17 +3,7 @@ from time import perf_counter
 import torch
 from model import PolicyNetwork
 from random import choice
-
-batches = 200
-batch_size = 3300
-learning_rate = 3e-3
-gamma = 1.0  # No discounting
-
-version = "0.2"
-
-save_path = f'models/model_v{version}.pth'
-
-log_freq = 1
+from config import *
 
 model= PolicyNetwork()
 
