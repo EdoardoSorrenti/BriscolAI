@@ -19,10 +19,9 @@ class PolicyNetwork(nn.Module):
         self.fc1 = nn.Linear(INPUT_SIZE, HIDDEN_SIZE)
         self.activation = nn.GELU()
         self.fc2 = nn.Linear(HIDDEN_SIZE, OUTPUT_SIZE)
-        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, mask, x):
         x = self.activation(self.fc1(x))
         x = self.fc2(x)
         x = x.masked_fill(~mask, float('-inf'))
-        return self.softmax(x)
+        return x
