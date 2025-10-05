@@ -1,5 +1,5 @@
 import pygame, sys
-import game, random
+import game as game, random
 
 """Test features"""
 SMALL_DECK = False
