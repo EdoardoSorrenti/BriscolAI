@@ -8,7 +8,7 @@ DECK = list(range(10, 50)) # 1-40
 
 class Game:
     
-    def reset(self):
+    def reset(self, turno=0):
         """Resets the game to initial state."""
         self.hands = [[], []]
         self.taken = [[], []]
@@ -20,7 +20,7 @@ class Game:
 
         self.briscola = self.deck[-1]
         self.on_table = [None, None]
-        self.turno = 0
+        self.turno = turno  # Player to play first, 0 or 1
     
     def compare_hands(self, card1, card2):
         """Compares cards played by P1 and P2,
