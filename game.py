@@ -4,7 +4,7 @@ import random, copy
 VALUES = {0:11, 1:0, 2:10, 3:0, 4:0, 5:0, 6:0, 7:2, 8:3, 9:4} # Valori carte a briscola
 
 # Creazione mazzo base
-DECK = list(range(10, 50)) # 1-40
+DECK = list(range(40)) # 1-40
 
 class Game:
     

@@ -16,7 +16,7 @@ CARD_HEIGHT = 150
 SMALL_FONT = 32
 
 """Hidden Card ID"""
-HIDDEN_CARD = 9
+HIDDEN_CARD = 49
 
 def randmove(hand):
     """Produce valid randomized moves."""
@@ -24,7 +24,7 @@ def randmove(hand):
         return 0
     return random.randint(0, len(hand)-1)
 
-seeds = ("H","B", "S", "C", "D") # Hidden, Bastoni, Spade, Coppe, Denari
+seeds = ("B", "S", "C", "D", "H") # Bastoni, Spade, Coppe, Denari, Hidden
 
 pygame.init()
 clock = pygame.time.Clock()
@@ -99,7 +99,7 @@ while running:
     screen.blit(font.render(f"P2: {score2} pts", True, (255,255,255)), (50,20))
     screen.blit(font.render(f"P1: {score1} pts", True, (255,255,255)), (50,SCREEN_HEIGHT-50))
 
-    if (session.turno == 1 or card1) and not card2:
+    if (session.turno == 1 or card1 != None) and card2 == None:
         move = randmove(session.hands[1])
         card2 = session.hands[1].pop(move)
         enemy_hand.pop(move)
@@ -108,7 +108,7 @@ while running:
 
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN and card1 == None:
-            if not card1:
+            if card1 == None:
                 if event.key == pygame.K_1:
                     card1 = session.hands[0].pop(0)
                     hand.pop(0)
@@ -139,17 +139,16 @@ while running:
     
     if len(session.deck) >= 2:
         screen.blit(turned_card.image, turned_card.rect.topleft)
-    
-    if card1:
+
+    if card1 != None:
         card1sprite = CardSprite(card1, SCREEN_WIDTH/2-CARD_WIDTH*1.5, SCREEN_HEIGHT/2-CARD_HEIGHT/2)
         screen.blit(card1sprite.image, card1sprite.rect.topleft)
 
-    if card2:
+    if card2 != None:
         card2sprite = CardSprite(card2, SCREEN_WIDTH/2-CARD_WIDTH*0.2, SCREEN_HEIGHT/2-CARD_HEIGHT/2)
         screen.blit(card2sprite.image, card2sprite.rect.topleft)
 
-
-    if card1 and card2:
+    if card1 != None and card2 != None:
         if WAITS:
             wait = 600
         winner = session.compare_hands(card1, card2)
