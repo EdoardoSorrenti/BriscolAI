@@ -85,18 +85,18 @@ def train_model(batches, batch_size):
     start_time = perf_counter()
     for batch in range(batches):
         outcomes = [0, 0, 0]  # Wins for player 1, player 2, draws
+        total_points = [0, 0]
         optimizer.zero_grad()
         policy_losses = []
         for episode in range(batch_size):
             game.reset(turno=episode % 2)
             winner, log_probs = fastloop(game, model)
+            p1, p2 = game.count_points()
             outcomes[winner] += 1
-            if winner == 0:
-                reward = 1
-            elif winner == 1:
-                reward = -1
-            else:
-                reward = 0
+            total_points[0] += p1
+            total_points[1] += p2
+            
+            reward = (p1 - p2) / 60 # Normalize reward to be between -2 and 2
             policy_losses.append(-log_probs.sum() * reward)
 
         policy_loss = torch.stack(policy_losses).sum()
@@ -107,10 +107,17 @@ def train_model(batches, batch_size):
             end_time = perf_counter()
             tot_time = end_time - start_time
             games_per_second = (batch_size * log_freq) / tot_time
+            avg_p1 = total_points[0]/batch_size
+            avg_p2 = total_points[1]/batch_size
             print(f"Batch {batch}:")
             print(f"Winner Model: {outcomes[0]/batch_size*100:.1f}%, Winner Noob: {outcomes[1]/batch_size*100:.1f}%, draws: {outcomes[2]/batch_size*100:.1f}%")
+            print(f"Avg points: Model {avg_p1:.1f}, Noob {avg_p2:.1f}")
             print(f"Compute speed: {round(games_per_second)} games/second")
             start_time = perf_counter()
+
+    # Save the model
+    torch.save(model.state_dict(), 'briscolai_model.pth')
+    print("Model saved to briscolai_model.pth")
 
 if __name__ == '__main__':
     train_model(batches, batch_size)
