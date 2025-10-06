@@ -4,7 +4,9 @@ import torch
 from model import PolicyNetwork
 from config import *
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(device_name)
+
+torch.set_default_device(device)
 
 model= PolicyNetwork()
 model.to(device)
@@ -27,20 +29,6 @@ def random_pick_multihot(x):
     rand = torch.rand_like(x, dtype=torch.float) * x
     # Pick the argmax of random numbers (guaranteed to pick one of the nonzero entries)
     return rand.argmax(dim=1)
-
-def card_to_onehot(card):
-    """Converts a card ID to a onehot tensor."""
-    onehot = torch.zeros(40, dtype=torch.float32)
-    if card is not None:
-        onehot[card] = 1 # Card IDs are 0-39
-    return onehot
-
-def cards_to_multihot(cards):
-    """Converts a list of card IDs to a multihot tensor."""
-    multihot = torch.zeros(40, dtype=torch.float32)
-    for card in cards:
-        multihot[card] = 1 # Card IDs are 0-39
-    return multihot
 
 def get_states(session, player_id=0):
     """Returns the current state of the game as a tensor."""

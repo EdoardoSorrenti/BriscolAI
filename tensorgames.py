@@ -1,7 +1,8 @@
 import random, copy
 import torch
+from config import device_name
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(device_name)
 
 # Point values assigned to each card
 VALUES = {0:11, 1:0, 2:10, 3:0, 4:0, 5:0, 6:0, 7:2, 8:3, 9:4} # Valori carte a briscola
