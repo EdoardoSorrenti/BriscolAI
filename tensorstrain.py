@@ -41,18 +41,6 @@ def cards_to_multihot(cards):
         multihot[card] = 1 # Card IDs are 0-39
     return multihot
 
-def get_state(session, player_id=0):
-    """Returns the current state of the game as a tensor."""
-    opponent_id = 1 - player_id
-    
-    my_hand = session.hands[player_id]
-    my_taken = session.taken[player_id]
-    opponent_taken = session.taken[opponent_id]
-    briscola = session.briscola_card
-    on_table = session.on_table
-
-    return torch.cat([my_hand, my_taken, opponent_taken, briscola, on_table], dim=0).unsqueeze(0)  # Shape: (1, 200)
-
 def get_states(session, player_id=0):
     """Returns the current state of the game as a tensor."""
     opponent_id = 1 - player_id
@@ -65,24 +53,9 @@ def get_states(session, player_id=0):
 
     return torch.cat([my_hand, my_taken, opponent_taken, briscole, on_table], dim=1)  # Shape: (N, 200)
 
-def get_action_mask(session, player_id=0):
-    """Returns a mask of valid actions for the current player."""
-    return session.hands[player_id].bool().unsqueeze(0)  # Shape: (1, 40)
-
 def get_action_masks(session, player_id=0):
     """Returns a mask of valid actions for the current player."""
     return session.hands[player_id].bool()  # Shape: (N, 40)
-
-def get_move(session, model, player_id=0):
-    """Returns a move for the current player using the model."""
-    state = get_state(session, player_id)
-    mask = get_action_mask(session, player_id)
-    logits = model(mask, state)
-    action_dist = torch.distributions.Categorical(logits=logits)
-    action = action_dist.sample()
-    log_prob = action_dist.log_prob(action)
-    card = action.item()
-    return card, log_prob
 
 def get_moves(session, model, player_id=0, mask=None):
     """Returns a move for the current player using the model."""
@@ -98,37 +71,6 @@ def get_moves(session, model, player_id=0, mask=None):
     actions = action_dists.sample()
     log_probs = action_dists.log_prob(actions)
     return actions, log_probs
-
-
-def fastloop(session, model):
-    """Plays a whole game with the model as player 0 and a random player as player 1."""
-    log_probs = []
-    while not session.check_finished():
-        if session.turno == 0:  # Model's turn to play first
-            card1, log_prob = get_move(session, model)
-            session.hands[0][card1] = 0
-            log_probs.append(log_prob)
-            session.on_table[card1] = 1
-
-            card2 = choice(session.hands[1].nonzero(as_tuple=True)[0].tolist())
-            session.hands[1][card2] = 0
-        else:
-            card2 = choice(session.hands[1].nonzero(as_tuple=True)[0].tolist())
-            session.hands[1][card2] = 0
-            session.on_table[card2] = 1
-
-            card1, log_prob = get_move(session, model)
-            session.hands[0][card1] = 0
-            log_probs.append(log_prob)
-
-        winner = session.compare_hands(card1, card2)
-        session.taken[winner][card1] = 1
-        session.taken[winner][card2] = 1
-        session.on_table.zero_()
-        session.turno = winner
-        session.draw()
-
-    return session.check_winner(), torch.stack(log_probs)
 
 
 def tensorloop_model_vs_random(games, model):
@@ -268,7 +210,6 @@ def train_model(batches, batch_size):
                 start_time_total = perf_counter()
 
             if batch % save_freq == 0 and batch > 0:
-                path = f"cached/{save_path}"
                 if hasattr(model, '_orig_mod'):
                     torch.save(model._orig_mod.state_dict(), path)
                 else:
