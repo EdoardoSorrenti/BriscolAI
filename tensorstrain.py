@@ -141,7 +141,7 @@ def tensorloop_model_vs_random(games, model):
     rewards = (p1_scores - p2_scores) / 60.0  # Normalize rewards
 
     log_prob_sums = all_log_probs.sum(dim=1)
-    policy_losses = -log_prob_sums * rewards
+    policy_losses = - log_prob_sums * rewards
 
     return policy_losses.sum(), games.check_winners()
 

@@ -3,7 +3,7 @@ batch_size = 4096 * 4
 learning_rate = 1e-4
 gamma = 1.0  # No discounting
 
-save_results = False
+save_results = True
 
 version = "0_3"
 
