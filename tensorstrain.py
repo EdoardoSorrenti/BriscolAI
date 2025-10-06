@@ -2,11 +2,12 @@ from tensorgames import Games
 from time import perf_counter
 import torch
 from model import PolicyNetwork
-from random import choice
 from config import *
-import random
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model= PolicyNetwork()
+model.to(device)
 
 try:
     model.load_state_dict(torch.load(save_path))

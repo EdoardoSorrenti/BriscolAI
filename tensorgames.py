@@ -1,10 +1,12 @@
 import random, copy
 import torch
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # Point values assigned to each card
 VALUES = {0:11, 1:0, 2:10, 3:0, 4:0, 5:0, 6:0, 7:2, 8:3, 9:4} # Valori carte a briscola
 
-VALUES_TENSOR = torch.tensor([11,0,10,0,0,0,0,2,3,4]*4, dtype=torch.float32)
+VALUES_TENSOR = torch.tensor([11,0,10,0,0,0,0,2,3,4]*4, dtype=torch.float32, device=device)
 
 # Creazione mazzo base
 DECK = list(range(40)) # 1-40
@@ -16,15 +18,15 @@ class Games:
         self.alternate_turns = alternate_turns
 
         # NN inputs
-        self.hands = [torch.zeros((N, 40), dtype=torch.float32), torch.zeros((N,40), dtype=torch.float32)] # Carte in mano
-        self.taken = [torch.zeros((N,40), dtype=torch.float32), torch.zeros((N,40), dtype=torch.float32)] # Carte prese
-        self.briscole_cards = torch.zeros((N,40), dtype=torch.float32) # Carta di briscola
-        self.on_table = torch.zeros((N,40), dtype=torch.float32) # Carte sul tavolo
+        self.hands = [torch.zeros((N, 40), dtype=torch.float32, device=device), torch.zeros((N,40), dtype=torch.float32, device=device)] # Carte in mano
+        self.taken = [torch.zeros((N,40), dtype=torch.float32, device=device), torch.zeros((N,40), dtype=torch.float32, device=device)] # Carte prese
+        self.briscole_cards = torch.zeros((N,40), dtype=torch.float32, device=device) # Carta di briscola
+        self.on_table = torch.zeros((N,40), dtype=torch.float32, device=device) # Carte sul tavolo
 
         # Utils
-        self.turns = torch.zeros(N, dtype=torch.int8)
-        self.briscole = torch.zeros(N, dtype=torch.int8)
-        
+        self.turns = torch.zeros(N, dtype=torch.int8, device=device)
+        self.briscole = torch.zeros(N, dtype=torch.int8, device=device)
+
     
     def reset(self, turno=0):
         """Resets the games to initial state."""
@@ -68,7 +70,7 @@ class Games:
         seme1_briscola = seme1 == self.briscole
         seme2_briscola = seme2 == self.briscole
         
-        winners = torch.zeros_like(idx1)
+        winners = torch.zeros_like(idx1, device=device, dtype=torch.int8) # 0 if player 1 wins, 1 if player 2 wins
 
         winners[diff_suit & seme2_briscola] = 1
         winners[same_suit & (val2 > val1)] = 1
@@ -93,7 +95,7 @@ class Games:
     def check_winners(self):
         """Returns index of the player with currently more points, 2 if draw."""
         count1, count2 = self.count_points()
-        winners = torch.zeros_like(count1, dtype=torch.int8)
+        winners = torch.zeros_like(count1, dtype=torch.int8, device=device)
 
         winners[count2>count1] = 1
         winners[count2 == count1] = 2
