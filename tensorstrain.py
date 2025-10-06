@@ -71,11 +71,13 @@ def tensorloop_model_vs_random(games, model):
     game_indices = torch.arange(n_games, dtype=torch.int64)
     
     # We will store the log_probs for each game's trajectory
-    all_log_probs = [[] for _ in range(n_games)]
+    all_log_probs = torch.zeros((n_games, 40), dtype=torch.float32)
 
     # Cards played in the current trick, initialized to an invalid value
     card1 = torch.full((n_games,), -1, dtype=torch.int64)
     card2 = torch.full((n_games,), -1, dtype=torch.int64)
+
+    counter = 0
 
     while not games.check_finished():
         # --- Determine whose turn it is for each game ---
@@ -88,9 +90,7 @@ def tensorloop_model_vs_random(games, model):
             actions, log_probs = get_moves(games, model, player_id=0, mask=turn0_mask)
             card1[turn0_mask] = actions
             
-            # Store log_probs for the corresponding games
-            for i, lp in zip(game_indices[turn0_mask], log_probs):
-                all_log_probs[i].append(lp)
+            all_log_probs[game_indices[turn0_mask], counter] = log_probs
 
             # Random player (P1) responds
             card2[turn0_mask] = random_pick_multihot(games.hands[1][turn0_mask])
@@ -107,17 +107,11 @@ def tensorloop_model_vs_random(games, model):
             actions, log_probs = get_moves(games, model, player_id=0, mask=turn1_mask)
             card1[turn1_mask] = actions
 
-            # Store log_probs
-            for i, lp in zip(game_indices[turn1_mask], log_probs):
-                all_log_probs[i].append(lp)
+            all_log_probs[game_indices[turn1_mask], counter] = log_probs
 
         # --- Update game state for all games at once ---
-        games.hands[0][game_indices, card1] = 0
-        games.hands[1][game_indices, card2] = 0
-        
-        # The on_table for turn0_mask games wasn't updated yet
-        games.on_table[game_indices, card1] = 1
-        games.on_table[game_indices, card2] = 1
+        games.hands[0].scatter_(1, card1.unsqueeze(1), 0)
+        games.hands[1].scatter_(1, card2.unsqueeze(1), 0)
 
         # Compare cards and determine winners for the trick
         winners = games.compare_cards(card1, card2)
@@ -140,45 +134,43 @@ def tensorloop_model_vs_random(games, model):
         # The winner of the trick leads the next one
         games.turns = winners.to(torch.int8)
         games.draw()
+        counter += 1
 
     # --- Game finished, calculate results ---
     p1_scores, p2_scores = games.count_points()
     rewards = (p1_scores - p2_scores) / 60.0  # Normalize rewards
 
-    policy_losses = []
-    for i in range(n_games):
-        if all_log_probs[i]:  # If the model made any moves
-            log_prob_sum = torch.stack(all_log_probs[i]).sum()
-            policy_losses.append(-log_prob_sum * rewards[i])
+    log_prob_sums = all_log_probs.sum(dim=1)
+    policy_losses = -log_prob_sums * rewards
 
-    return torch.stack(policy_losses).sum(), games.check_winners()
+    return policy_losses.sum(), games.check_winners()
 
 
 def train_model(batches, batch_size):
     """Trains the model for a given number of epochs."""
     start_time_total = perf_counter()
+    wins = 0
+    tot_games = 0
+    
+    games = Games(batch_size, alternate_turns=True)  # Wins, Losses, Draws
     
     for batch in range(batches):
         try:
             optimizer.zero_grad()
-            
-            # Alternate starting player for each batch
-            games = Games(batch_size, alternate_turns=True)
             games.reset()
             
             policy_loss, winners_array = tensorloop_model_vs_random(games, model)
-            
+
+            wins += (winners_array == 0).sum().item()
+            tot_games += batch_size
+
+
             if torch.is_tensor(policy_loss):
                 policy_loss.backward()
                 optimizer.step()
 
             if batch % log_freq == 0 and batch > 0:
                 p1s, p2s = games.count_points()
-                outcomes = [
-                    (winners_array == 0).sum().item(),
-                    (winners_array == 1).sum().item(),
-                    (winners_array == 2).sum().item()
-                ]
                 
                 end_time = perf_counter()
                 tot_time = end_time - start_time_total
@@ -187,34 +179,36 @@ def train_model(batches, batch_size):
                 
                 avg_p1 = p1s.mean().item()
                 avg_p2 = p2s.mean().item()
-                win_rate = (outcomes[0] / batch_size) * 100
-                draw_rate = (outcomes[2] / batch_size) * 100
+                win_rate = (wins / tot_games) * 100
 
                 print(f"\n--- Batch {batch} ---")
-                print(f"Model Win/Draw %: {win_rate:.1f}% / {draw_rate:.1f}%")
+                print(f"Model Win Rate: {win_rate:.1f}%")
                 print(f"Avg Points (Model vs Random): {avg_p1:.1f} vs {avg_p2:.1f}")
                 print(f"Compute Speed: {round(games_per_second)} games/sec")
                 if torch.is_tensor(policy_loss):
                     print(f"Policy Loss: {policy_loss.item():.4f}")
+                
                 start_time_total = perf_counter()
 
             if batch % save_freq == 0 and batch > 0:
-                if hasattr(model, '_orig_mod'):
-                    torch.save(model._orig_mod.state_dict(), save_path)
-                else:
-                    torch.save(model.state_dict(), save_path)
-                print(f"Model saved to {save_path}")
+                if save_results:
+                    if hasattr(model, '_orig_mod'):
+                        torch.save(model._orig_mod.state_dict(), save_path)
+                    else:
+                        torch.save(model.state_dict(), save_path)
+                    print(f"Model saved to {save_path}")
 
         except KeyboardInterrupt:
             print("\nTraining interrupted. Saving final model...")
             break
 
     # Save the final model
-    if hasattr(model, '_orig_mod'):
-        torch.save(model._orig_mod.state_dict(), save_path)
-    else:
-        torch.save(model.state_dict(), save_path)
-    print(f"Final model saved to {save_path}")
+    if save_results:
+        if hasattr(model, '_orig_mod'):
+            torch.save(model._orig_mod.state_dict(), save_path)
+        else:
+            torch.save(model.state_dict(), save_path)
+        print(f"Final model saved to {save_path}")
 
 if __name__ == '__main__':
     train_model(batches, batch_size)
