@@ -127,6 +127,13 @@ def train_model(batches, batch_size):
                 print(f"Avg points: Model {avg_p1:.1f}, Noob {avg_p2:.1f}")
                 print(f"Compute speed: {round(games_per_second)} games/second")
                 start_time = perf_counter()
+            if batch % save_freq == 0:
+                if hasattr(model, '_orig_mod'):
+                    torch.save(model._orig_mod.state_dict(), f"cached/{save_path}")
+                else:
+                    torch.save(model.state_dict(), f"cached/{save_path}")
+                print(f"Model saved to cached/{save_path}")
+
     except KeyboardInterrupt:
         print("Training interrupted. Saving model...")
 

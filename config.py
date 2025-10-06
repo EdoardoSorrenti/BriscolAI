@@ -8,3 +8,4 @@ version = "0.2"
 save_path = f'models/model_v{version}.pth'
 
 log_freq = 1
+save_freq = 50
