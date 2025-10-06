@@ -211,22 +211,21 @@ def train_model(batches, batch_size):
 
             if batch % save_freq == 0 and batch > 0:
                 if hasattr(model, '_orig_mod'):
-                    torch.save(model._orig_mod.state_dict(), path)
+                    torch.save(model._orig_mod.state_dict(), save_path)
                 else:
-                    torch.save(model.state_dict(), path)
-                print(f"Model saved to {path}")
+                    torch.save(model.state_dict(), save_path)
+                print(f"Model saved to {save_path}")
 
         except KeyboardInterrupt:
             print("\nTraining interrupted. Saving final model...")
             break
 
     # Save the final model
-    path = f"cached/{save_path}"
     if hasattr(model, '_orig_mod'):
-        torch.save(model._orig_mod.state_dict(), path)
+        torch.save(model._orig_mod.state_dict(), save_path)
     else:
-        torch.save(model.state_dict(), path)
-    print(f"Final model saved to {path}")
+        torch.save(model.state_dict(), save_path)
+    print(f"Final model saved to {save_path}")
 
 if __name__ == '__main__':
     train_model(batches, batch_size)
