@@ -1,10 +1,20 @@
 import pygame, sys
 import game as game, random
+import torch
+from model import PolicyNetwork
+from utils import *
+
+model_path = 'model.pth'
+
+model = PolicyNetwork()
+model.load_state_dict(torch.load(model_path))
+model.eval()
 
 """Test features"""
 SMALL_DECK = False
 WAITS = True
 CARTE_SCOPERTE = False
+HIDE_POINTS = False
 
 """Pygame parameters"""
 SCREEN_WIDTH = 800
@@ -18,11 +28,15 @@ SMALL_FONT = 32
 """Hidden Card ID"""
 HIDDEN_CARD = 49
 
-def randmove(hand):
+def get_move(session, on_table = None, player_id = 0):
     """Produce valid randomized moves."""
-    if len(hand) <= 1:
-        return 0
-    return random.randint(0, len(hand)-1)
+    with torch.no_grad():
+        state = get_state(session, on_table = on_table, player_id=player_id)
+        mask = get_action_mask(session, player_id=player_id)
+        logits = model(mask, state)
+        action_dist = torch.distributions.Categorical(logits=logits)
+        card = action_dist.sample().item()
+        return card
 
 seeds = ("B", "S", "C", "D", "H") # Bastoni, Spade, Coppe, Denari, Hidden
 
@@ -96,13 +110,15 @@ while running:
 
     score1, score2 = session.count_points()
 
-    screen.blit(font.render(f"P2: {score2} pts", True, (255,255,255)), (50,20))
-    screen.blit(font.render(f"P1: {score1} pts", True, (255,255,255)), (50,SCREEN_HEIGHT-50))
+    if not HIDE_POINTS:
+        screen.blit(font.render(f"P2: {score2} pts", True, (255,255,255)), (50,20))
+        screen.blit(font.render(f"P1: {score1} pts", True, (255,255,255)), (50,SCREEN_HEIGHT-50))
 
     if (session.turno == 1 or card1 != None) and card2 == None:
-        move = randmove(session.hands[1])
-        card2 = session.hands[1].pop(move)
-        enemy_hand.pop(move)
+        card2 = get_move(session, on_table=card1, player_id=1)
+        index = session.hands[1].index(card2)
+        session.hands[1].pop(index)
+        enemy_hand.pop(index)
         card2sprite = CardSprite(card2, SCREEN_WIDTH/2-CARD_WIDTH*0.2, SCREEN_HEIGHT/2-CARD_HEIGHT/2)        
 
 
