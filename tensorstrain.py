@@ -79,7 +79,7 @@ def tensorloop_model_vs_random(games, model):
 
     counter = 0
 
-    while not games.check_finished():
+    for _ in range(20):  # 20 tricks per game
         # --- Determine whose turn it is for each game ---
         turn0_mask = games.turns == 0
         turn1_mask = games.turns == 1
@@ -137,13 +137,13 @@ def tensorloop_model_vs_random(games, model):
         counter += 1
 
     # --- Game finished, calculate results ---
-    p1_scores, p2_scores = games.count_points()
+    p1_scores, p2_scores, winners = games.check_winners()
     rewards = (p1_scores - p2_scores) / 60.0  # Normalize rewards
 
     log_prob_sums = all_log_probs.sum(dim=1)
     policy_losses = - log_prob_sums * rewards
 
-    return policy_losses.sum(), games.check_winners()
+    return policy_losses.sum(), winners
 
 
 def train_model(batches, batch_size):
@@ -161,7 +161,7 @@ def train_model(batches, batch_size):
             
             policy_loss, winners_array = tensorloop_model_vs_random(games, model)
 
-            wins += (winners_array == 0).sum().item()
+            wins += (winners_array == 0)
             tot_games += batch_size
 
 
@@ -179,7 +179,7 @@ def train_model(batches, batch_size):
                 
                 avg_p1 = p1s.mean().item()
                 avg_p2 = p2s.mean().item()
-                win_rate = (wins / tot_games) * 100
+                win_rate = (wins.sum().item() / tot_games) * 100
 
                 print(f"\n--- Batch {batch} ---")
                 print(f"Model Win Rate: {win_rate:.1f}%")
