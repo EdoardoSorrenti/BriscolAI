@@ -88,10 +88,6 @@ class Games:
         points = (self.taken * VALUES_TENSOR).sum(dim=2)  # (2, N)
         return points[0], points[1]  # (N,), (N,)
 
-    def check_finished(self):
-        """Returns whether the game (first table) is over (compat with original behavior)."""
-        return (self.hands[0, 0].sum().item() == 0) and (self.hands[1, 0].sum().item() == 0)
-
     def check_winners(self):
         """Returns points and winner per game (0/1/2 for draw)."""
         count1, count2 = self.count_points()
