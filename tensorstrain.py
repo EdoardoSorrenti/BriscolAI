@@ -1,15 +1,19 @@
-from tensorgames import Games
 from time import perf_counter
 import torch
-from model import PolicyNetwork
 from config import *
 
-device = torch.device(device_name)
+
+torch.set_default_device(device)
+torch.set_default_dtype(dtype)
+
+
+from model import PolicyNetwork
+from tensorgames import Games
+
 
 torch.set_default_device(device)
 
 model= PolicyNetwork()
-model.to(device)
 
 try:
     model.load_state_dict(torch.load(save_path))
@@ -22,11 +26,13 @@ try:
 except Exception as e:
     print(f"Warning: torch.compile failed with error {e}, continuing without it.")
 
+
+model.to(device, dtype=dtype)
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 def random_pick_multihot(x):
     # Random numbers, set zeros where x is zero
-    rand = torch.rand_like(x, dtype=torch.float) * x
+    rand = torch.rand_like(x) * x
     # Pick the argmax of random numbers (guaranteed to pick one of the nonzero entries)
     return rand.argmax(dim=1)
 
@@ -71,7 +77,7 @@ def tensorloop_model_vs_random(games, model):
     game_indices = torch.arange(n_games, dtype=torch.int64)
     
     # We will store the log_probs for each game's trajectory
-    all_log_probs = torch.zeros((n_games, 40), dtype=torch.float32)
+    all_log_probs = torch.zeros((n_games, 40))
 
     # Cards played in the current trick, initialized to an invalid value
     card1 = torch.full((n_games,), -1, dtype=torch.int64)

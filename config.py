@@ -1,3 +1,5 @@
+import torch
+
 batches = 10000
 batch_size = 4096 * 2
 learning_rate = 8e-4
@@ -9,7 +11,9 @@ version = "0_3"
 
 save_path = f'models/model_v{version}.pth'
 
-device_name = "cuda"
+
+device = torch.device("cpu")
+dtype = torch.bfloat16
 
 log_freq = 10
 save_freq = 50
