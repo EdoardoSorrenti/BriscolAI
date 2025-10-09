@@ -21,8 +21,9 @@ class Games:
         self.on_table = torch.zeros((N, 40))
 
         # Utils
-        self.turns = torch.zeros(N, dtype=torch.int8)     # 0 -> P0 first, 1 -> P1 first
+        self.player2_starts = torch.zeros(N, dtype=torch.bool)     # 0 -> P0 first, 1 -> P1 first
         self.briscole = torch.zeros(N, dtype=torch.int8)  # suit (0..3)
+        self.trick_winners = torch.zeros(N, dtype=torch.int8)  # 0/1 per ogni mano
 
         # Decks (initialized in reset)
         self.decks = None                 # (N, 40) int64
@@ -36,7 +37,7 @@ class Games:
         self.on_table.zero_()
 
         self.briscole.zero_()
-        self.turns.zero_()
+        self.player2_starts.zero_()
 
         # Create tensorized decks: each row a shuffled permutation of 0..39.
         self.decks = torch.stack([torch.randperm(40) for _ in range(self.N)])  # (N, 40), int64
@@ -52,9 +53,9 @@ class Games:
 
         # Initial turns
         if self.alternate_turns:
-            self.turns = (torch.arange(self.N) % 2).to(torch.int8)
+            self.player2_starts = (torch.arange(self.N) % 2).bool()
         else:
-            self.turns.zero_()
+            self.player2_starts.zero_()
 
         # First deal: exactly three draws
         for _ in range(3):
@@ -73,12 +74,15 @@ class Games:
         seme1_briscola = seme1 == self.briscole
         seme2_briscola = seme2 == self.briscole
 
-        winners = torch.zeros_like(idx1, dtype=torch.int8)  # 0 if P1 wins, 1 if P2 wins
-        winners[diff_suit & seme2_briscola] = 1
-        winners[same_suit & (val2 > val1)] = 1
-        winners[same_suit & (val2 == val1) & (num2 > num1)] = 1
-        winners[diff_suit & ~seme1_briscola & (self.turns == 1)] = 1
-        return winners
+        self.trick_winners.zero_()  # 0 if P1 wins, 1 if P2 wins
+        self.trick_winners[diff_suit & seme2_briscola] = 1 # P2 briscola, P1 not
+        self.trick_winners[same_suit & (val2 > val1)] = 1 # same suit, higher value
+        self.trick_winners[same_suit & (val2 == val1) & (num2 > num1)] = 1 # same suit, same value, higher rank
+        self.trick_winners[diff_suit & ~seme1_briscola & self.player2_starts] = 1 # P2 leads, neither briscola
+
+        self.player2_starts.copy_(self.trick_winners.bool())
+
+        return self.trick_winners
 
     def count_points(self):
         """Returns the players' current point counts (per game)."""
@@ -103,7 +107,7 @@ class Games:
         c_second = self.decks[:, self.deck_pos - 1]
 
         # Per-player card indices (N,1)
-        turn = self.turns
+        turn = self.player2_starts
         p0_idx = torch.where(turn == 0, c_first,  c_second).unsqueeze(1)
         p1_idx = torch.where(turn == 0, c_second, c_first ).unsqueeze(1)
 

@@ -87,8 +87,8 @@ def tensorloop_model_vs_random(games, model):
 
     for _ in range(20):  # 20 tricks per game
         # --- Determine whose turn it is for each game ---
-        turn0_mask = games.turns == 0
-        turn1_mask = games.turns == 1
+        turn0_mask = ~games.player2_starts
+        turn1_mask = games.player2_starts
 
         # --- Process games where Model (P0) plays first ---
         if turn0_mask.any():
@@ -138,7 +138,6 @@ def tensorloop_model_vs_random(games, model):
         games.on_table.zero_()
         
         # The winner of the trick leads the next one
-        games.turns = winners.to(torch.int8)
         games.draw()
         counter += 1
 
@@ -156,6 +155,7 @@ def train_model(batches, batch_size):
     """Trains the model for a given number of epochs."""
     start_time_total = perf_counter()
     wins = 0
+    losses = 0
     tot_games = 0
     
     games = Games(batch_size, alternate_turns=True)  # Wins, Losses, Draws
@@ -168,6 +168,7 @@ def train_model(batches, batch_size):
             policy_loss, winners_array = tensorloop_model_vs_random(games, model)
 
             wins += (winners_array == 0)
+            losses += (winners_array == 1)
             tot_games += batch_size
 
 
@@ -186,9 +187,10 @@ def train_model(batches, batch_size):
                 avg_p1 = p1s.mean().item()
                 avg_p2 = p2s.mean().item()
                 win_rate = (wins.sum().item() / tot_games) * 100
+                loss_rate = (losses.sum().item() / tot_games) * 100
 
                 print(f"\n--- Batch {batch} ---")
-                print(f"Model Win Rate: {win_rate:.1f}%")
+                print(f"Model Win Rate: {win_rate:.1f}%, Loss Rate: {loss_rate:.1f}%")
                 print(f"Avg Points (Model vs Random): {avg_p1:.1f} vs {avg_p2:.1f}")
                 print(f"Compute Speed: {round(games_per_second)} games/sec")
                 if torch.is_tensor(policy_loss):
