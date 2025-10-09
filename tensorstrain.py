@@ -22,7 +22,7 @@ except FileNotFoundError:
     print(f"No saved model found at {save_path}, starting fresh.")
 
 try:
-    model = torch.compile(model, fullgraph=False, backend="eager")
+    model = torch.compile(model, fullgraph=False)
 except Exception as e:
     print(f"Warning: torch.compile failed with error {e}, continuing without it.")
 
@@ -143,8 +143,8 @@ def tensorloop_model_vs_random(games, model):
         counter += 1
 
     # --- Game finished, calculate results ---
-    p1_scores, p2_scores, winners = games.check_winners()
-    rewards = (p1_scores - p2_scores) / 60.0  # Normalize rewards
+    _, _, winners = games.check_winners()
+    rewards = torch.zeros_like(winners).masked_fill_(winners == 0, 1.0).masked_fill_(winners == 1, -1.0)
 
     log_prob_sums = all_log_probs.sum(dim=1)
     policy_losses = - log_prob_sums * rewards

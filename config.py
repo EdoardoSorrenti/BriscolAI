@@ -12,8 +12,8 @@ version = "0_3"
 save_path = f'models/model_v{version}.pth'
 
 
-device = torch.device("cpu")
+device = torch.device("cuda")
 dtype = torch.bfloat16
 
-log_freq = 10
-save_freq = 50
+log_freq = 50
+save_freq = 500
