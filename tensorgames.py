@@ -1,9 +1,21 @@
+from pathlib import Path
+
 import torch
 
 
 # Point values assigned to each card
 VALUES = {0:11, 1:0, 2:10, 3:0, 4:0, 5:0, 6:0, 7:2, 8:3, 9:4}  # Valori carte a briscola
 VALUES_TENSOR = torch.tensor([11,0,10,0,0,0,0,2,3,4]*4)
+
+LOOKUP_PATH = Path(__file__).resolve().with_name("lookup_tables.pt")
+try:
+    _lookup_payload = torch.load(LOOKUP_PATH)
+    WINNER_TABLE = _lookup_payload["winner"].to(torch.int8)
+except FileNotFoundError:
+    from generate_lookup_tables import build_winner_table
+
+    WINNER_TABLE = build_winner_table().to(torch.int8)
+    torch.save({"winner": WINNER_TABLE}, LOOKUP_PATH)
 
 # Creazione mazzo base
 DECK = list(range(40))  # 0..39
@@ -15,8 +27,8 @@ class Games:
         self.alternate_turns = alternate_turns
 
         # Vectorized: (2, N, 40) so hands[0] -> player 1, hands[1] -> player 2
-        self.hands  = torch.zeros((2, N, 40))  # Carte in mano
-        self.taken  = torch.zeros((2, N, 40))  # Carte prese
+        self.hands = torch.zeros((2, N, 40))  # Carte in mano
+        self.taken = torch.zeros((2, N, 40))  # Carte prese
         self.briscole_cards = torch.zeros((N, 40))
         self.on_table = torch.zeros((N, 40))
 
@@ -25,15 +37,16 @@ class Games:
         self.ones = torch.ones((N, 1), device=device, dtype=dtype)
         self.values_fp32 = VALUES_TENSOR.to(device=device, dtype=torch.float32)
         self.rand_buffer = torch.empty((N, 40), device=device, dtype=torch.float32)
+        self.winner_table = WINNER_TABLE.to(device=device)
 
         # Utils
-        self.player2_starts = torch.zeros(N, dtype=torch.bool)     # 0 -> P0 first, 1 -> P1 first
+        self.player2_starts = torch.zeros(N, dtype=torch.bool)  # 0 -> P0 first, 1 -> P1 first
         self.briscole = torch.zeros(N, dtype=torch.int8)  # suit (0..3)
         self.trick_winners = torch.zeros(N, dtype=torch.int8)  # 0/1 per ogni mano
 
         # Decks (initialized in reset)
-        self.decks = None                 # (N, 40) int64
-        self.deck_pos = None              # shared python int
+        self.decks = None  # (N, 40) int64
+        self.deck_pos = None  # shared python int
 
     def reset(self, turno=0):
         """Resets the games to initial state."""
@@ -46,7 +59,7 @@ class Games:
         self.player2_starts.zero_()
 
         # Create tensorized decks: each row a shuffled permutation of 0..39.
-        uniforms = torch.rand((self.N, 40))
+        uniforms = torch.rand((self.N, 40), device=self.hands.device)
         self.decks = uniforms.argsort(dim=1)  # (N, 40), int64
         self.deck_pos = 39  # last index (shared across all rows)
 
@@ -56,7 +69,7 @@ class Games:
         # One-hot suits in briscole_cards via scatter_ (indices must be long)
         suit_idx = self.briscole.to(torch.long).unsqueeze(1)             # (N,1)
         self.briscole_cards.zero_()
-        self.briscole_cards.scatter_(1, suit_idx, torch.ones((self.N,1)))
+        self.briscole_cards.scatter_(1, suit_idx, self.ones)
 
         # Initial turns
         if self.alternate_turns:
@@ -70,25 +83,14 @@ class Games:
 
     def compare_cards(self, idx1, idx2):
         """Return winners (0 if player 1 wins, 1 if player 2 wins) for each game."""
-        seme1, num1 = idx1 // 10, idx1 % 10
-        seme2, num2 = idx2 // 10, idx2 % 10
-
-        val1 = VALUES_TENSOR[num1]
-        val2 = VALUES_TENSOR[num2]
-
-        same_suit = seme1 == seme2
-        diff_suit = ~same_suit
-        seme1_briscola = seme1 == self.briscole
-        seme2_briscola = seme2 == self.briscole
-
-        self.trick_winners.zero_()  # 0 if P1 wins, 1 if P2 wins
-        self.trick_winners[diff_suit & seme2_briscola] = 1 # P2 briscola, P1 not
-        self.trick_winners[same_suit & (val2 > val1)] = 1 # same suit, higher value
-        self.trick_winners[same_suit & (val2 == val1) & (num2 > num1)] = 1 # same suit, same value, higher rank
-        self.trick_winners[diff_suit & ~seme1_briscola & self.player2_starts] = 1 # P2 leads, neither briscola
-
+        winners = self.winner_table[
+            self.briscole.long(),
+            self.player2_starts.long(),
+            idx1.long(),
+            idx2.long(),
+        ]
+        self.trick_winners.copy_(winners)
         self.player2_starts.copy_(self.trick_winners.bool())
-
         return self.trick_winners
 
     def count_points(self):
