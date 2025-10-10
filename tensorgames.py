@@ -20,6 +20,12 @@ class Games:
         self.briscole_cards = torch.zeros((N, 40))
         self.on_table = torch.zeros((N, 40))
 
+        device = self.hands.device
+        dtype = self.hands.dtype
+        self.ones = torch.ones((N, 1), device=device, dtype=dtype)
+        self.values_fp32 = VALUES_TENSOR.to(device=device, dtype=torch.float32)
+        self.rand_buffer = torch.empty((N, 40), device=device, dtype=torch.float32)
+
         # Utils
         self.player2_starts = torch.zeros(N, dtype=torch.bool)     # 0 -> P0 first, 1 -> P1 first
         self.briscole = torch.zeros(N, dtype=torch.int8)  # suit (0..3)
@@ -40,7 +46,8 @@ class Games:
         self.player2_starts.zero_()
 
         # Create tensorized decks: each row a shuffled permutation of 0..39.
-        self.decks = torch.stack([torch.randperm(40) for _ in range(self.N)])  # (N, 40), int64
+        uniforms = torch.rand((self.N, 40))
+        self.decks = uniforms.argsort(dim=1)  # (N, 40), int64
         self.deck_pos = 39  # last index (shared across all rows)
 
         # Briscola suit determined by the "bottom" card (index 0)
@@ -86,7 +93,8 @@ class Games:
 
     def count_points(self):
         """Returns the players' current point counts (per game)."""
-        points = (self.taken * VALUES_TENSOR).sum(dim=2)  # (2, N)
+        taken_fp32 = self.taken.to(torch.float32)
+        points = (taken_fp32 * self.values_fp32).sum(dim=2)  # (2, N)
         return points[0], points[1]  # (N,), (N,)
 
     def check_winners(self):
@@ -111,11 +119,65 @@ class Games:
         p0_idx = torch.where(turn == 0, c_first,  c_second).unsqueeze(1)
         p1_idx = torch.where(turn == 0, c_second, c_first ).unsqueeze(1)
 
-        ones = torch.ones((self.N, 1))
-
         # Scatter into (2, N, 40) — each player plane is (N, 40)
-        self.hands[0].scatter_(1, p0_idx, ones)
-        self.hands[1].scatter_(1, p1_idx, ones)
+        self.hands[0].scatter_(1, p0_idx, self.ones)
+        self.hands[1].scatter_(1, p1_idx, self.ones)
+
 
         # Advance shared pointer by two
         self.deck_pos -= 2
+
+    # --- Helper utilities for simulation control ---
+
+    def split_turns(self):
+        """Returns (mask, indices) tuples for games where player 0 or 1 acts next."""
+        turn0_mask = ~self.player2_starts
+        turn1_mask = self.player2_starts
+        turn0_idx = torch.nonzero(turn0_mask, as_tuple=True)[0]
+        turn1_idx = torch.nonzero(turn1_mask, as_tuple=True)[0]
+        return (turn0_mask, turn0_idx), (turn1_mask, turn1_idx)
+
+    def hand_subset(self, player_id, indices=None):
+        """Returns hands for the specified player, optionally restricted to indices."""
+        if indices is None:
+            return self.hands[player_id]
+        return self.hands[player_id].index_select(0, indices)
+
+    def place_on_table(self, game_indices, card_indices):
+        """Marks the provided cards as currently on the table for selected games."""
+        self.on_table[game_indices, card_indices] = 1
+
+    def remove_played_cards(self, card_player0, card_player1):
+        """Removes the cards just played from both players' hands."""
+        self.hands[0].scatter_(1, card_player0.unsqueeze(1), 0)
+        self.hands[1].scatter_(1, card_player1.unsqueeze(1), 0)
+
+    def record_taken_cards(self, winners, card_player0, card_player1):
+        """Updates taken piles according to the trick winners."""
+        p0_idx = torch.nonzero(winners == 0, as_tuple=True)[0]
+        if p0_idx.numel():
+            self.taken[0][p0_idx, card_player0[p0_idx]] = 1
+            self.taken[0][p0_idx, card_player1[p0_idx]] = 1
+
+        p1_idx = torch.nonzero(winners == 1, as_tuple=True)[0]
+        if p1_idx.numel():
+            self.taken[1][p1_idx, card_player0[p1_idx]] = 1
+            self.taken[1][p1_idx, card_player1[p1_idx]] = 1
+
+    def clear_table(self):
+        """Resets table state once the trick is resolved."""
+        self.on_table.zero_()
+
+    def refresh_random_buffer(self):
+        """Refills the cached random scores used for stochastic moves."""
+        self.rand_buffer.uniform_()
+
+    def pick_random_cards(self, player_id, indices):
+        """Returns random valid card indices for the given player and subset of games."""
+        if indices.numel() == 0:
+            return torch.empty(0, dtype=torch.long, device=self.hands.device)
+
+        scores = self.rand_buffer.index_select(0, indices)
+        hands = self.hand_subset(player_id, indices).to(scores.dtype)
+        scores.mul_(hands)
+        return scores.argmax(dim=1)

@@ -30,12 +30,6 @@ except Exception as e:
 model.to(device, dtype=dtype)
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-def random_pick_multihot(x):
-    # Random numbers, set zeros where x is zero
-    rand = torch.rand_like(x) * x
-    # Pick the argmax of random numbers (guaranteed to pick one of the nonzero entries)
-    return rand.argmax(dim=1)
-
 def get_states(session, player_id=0):
     """Returns the current state of the game as a tensor."""
     opponent_id = 1 - player_id
@@ -61,11 +55,15 @@ def get_moves(session, model, player_id=0, mask=None):
         states = states[mask]
         masks = masks[mask]
 
-    logits = model(masks, states)
-    action_dists = torch.distributions.Categorical(logits=logits)
-    actions = action_dists.sample()
-    log_probs = action_dists.log_prob(actions)
-    return actions, log_probs
+    probs = model(states, masks)
+
+    # Work in float32 for stable sampling/logarithms, then return the log-probs
+    # in the default dtype. Masking is already applied inside the model.
+    probs_fp32 = probs.to(torch.float32)
+    actions = torch.multinomial(probs_fp32, 1).squeeze(1)
+    selected_probs = probs_fp32.gather(1, actions.unsqueeze(1)).squeeze(1)
+    log_probs = selected_probs.clamp_min(1e-12).log()
+    return actions, log_probs.to(probs.dtype)
 
 
 def tensorloop_model_vs_random(games, model):
@@ -74,81 +72,70 @@ def tensorloop_model_vs_random(games, model):
     Handles games where the model plays first and games where the random player plays first.
     """
     n_games = games.N
-    game_indices = torch.arange(n_games, dtype=torch.int64)
-    
-    # We will store the log_probs for each game's trajectory
-    all_log_probs = torch.zeros((n_games, 40))
+    # We will store the log_probs for each game's trajectory (20 moves per game)
+    all_log_probs = torch.zeros((n_games, 20))
 
     # Cards played in the current trick, initialized to an invalid value
     card1 = torch.full((n_games,), -1, dtype=torch.int64)
     card2 = torch.full((n_games,), -1, dtype=torch.int64)
 
-    counter = 0
-
-    for _ in range(20):  # 20 tricks per game
+    for i in range(20):  # 20 tricks per game
         # --- Determine whose turn it is for each game ---
-        turn0_mask = ~games.player2_starts
-        turn1_mask = games.player2_starts
+        (turn0_mask, turn0_idx), (turn1_mask, turn1_idx) = games.split_turns()
+        games.refresh_random_buffer()
 
         # --- Process games where Model (P0) plays first ---
-        if turn0_mask.any():
-            # Get moves from the model for this subset of games
-            actions, log_probs = get_moves(games, model, player_id=0, mask=turn0_mask)
-            card1[turn0_mask] = actions
-            
-            all_log_probs[game_indices[turn0_mask], counter] = log_probs
+        if turn0_idx.numel():
+            actions0, log_probs0 = get_moves(games, model, player_id=0, mask=turn0_mask)
+            card1.index_copy_(0, turn0_idx, actions0)
 
-            # Random player (P1) responds
-            card2[turn0_mask] = random_pick_multihot(games.hands[1][turn0_mask])
+            games.place_on_table(turn0_idx, actions0)  # expose card to opponent
+            all_log_probs[turn0_idx, i] = log_probs0
+
+            card2_turn0 = games.pick_random_cards(player_id=1, indices=turn0_idx)
+            card2.index_copy_(0, turn0_idx, card2_turn0)
 
         # --- Process games where Random Player (P1) plays first ---
-        if turn1_mask.any():
-            # Random player (P1) plays
-            card2[turn1_mask] = random_pick_multihot(games.hands[1][turn1_mask])
-            
-            # Update the 'on_table' state so the model sees the opponent's card
-            games.on_table[game_indices[turn1_mask], card2[turn1_mask]] = 1
+        if turn1_idx.numel():
+            card2_turn1 = games.pick_random_cards(player_id=1, indices=turn1_idx)
+            card2.index_copy_(0, turn1_idx, card2_turn1)
 
-            # Get moves from the model for this subset of games
-            actions, log_probs = get_moves(games, model, player_id=0, mask=turn1_mask)
-            card1[turn1_mask] = actions
+            games.place_on_table(turn1_idx, card2_turn1)  # model observes opponent card
 
-            all_log_probs[game_indices[turn1_mask], counter] = log_probs
+            actions1, log_probs1 = get_moves(games, model, player_id=0, mask=turn1_mask)
+            card1.index_copy_(0, turn1_idx, actions1)
+
+            all_log_probs[turn1_idx, i] = log_probs1
 
         # --- Update game state for all games at once ---
-        games.hands[0].scatter_(1, card1.unsqueeze(1), 0)
-        games.hands[1].scatter_(1, card2.unsqueeze(1), 0)
+        games.remove_played_cards(card1, card2)
 
         # Compare cards and determine winners for the trick
         winners = games.compare_cards(card1, card2)
 
         # Update taken cards based on who won
-        p0_wins_mask = winners == 0
-        p1_wins_mask = winners == 1
-
-        if p0_wins_mask.any():
-            games.taken[0][game_indices[p0_wins_mask], card1[p0_wins_mask]] = 1
-            games.taken[0][game_indices[p0_wins_mask], card2[p0_wins_mask]] = 1
-        
-        if p1_wins_mask.any():
-            games.taken[1][game_indices[p1_wins_mask], card1[p1_wins_mask]] = 1
-            games.taken[1][game_indices[p1_wins_mask], card2[p1_wins_mask]] = 1
+        games.record_taken_cards(winners, card1, card2)
 
         # Clear the table for the next trick
-        games.on_table.zero_()
+        games.clear_table()
         
         # The winner of the trick leads the next one
         games.draw()
-        counter += 1
+
+
 
     # --- Game finished, calculate results ---
-    _, _, winners = games.check_winners()
-    rewards = torch.zeros_like(winners).masked_fill_(winners == 0, 1.0).masked_fill_(winners == 1, -1.0)
+    if optimize_points:
+        p1s, p2s, winners = games.check_winners()
+        rewards = (p1s - p2s) / 60  # Reward is the point difference
+    else:
+        _, _, winners = games.check_winners()
+        rewards = torch.zeros_like(winners).masked_fill_(winners == 0, 1.0).masked_fill_(winners == 1, -1.0)
 
     log_prob_sums = all_log_probs.sum(dim=1)
     policy_losses = - log_prob_sums * rewards
 
-    return policy_losses.sum(), winners
+    return policy_losses.mean(), winners
 
 
 def train_model(batches, batch_size):
@@ -157,19 +144,17 @@ def train_model(batches, batch_size):
     wins = 0
     losses = 0
     tot_games = 0
+    batch = 0
     
     games = Games(batch_size, alternate_turns=True)  # Wins, Losses, Draws
     
-    for batch in range(batches):
+    while True:
+        batch += 1
         try:
             optimizer.zero_grad()
             games.reset()
             
             policy_loss, winners_array = tensorloop_model_vs_random(games, model)
-
-            wins += (winners_array == 0)
-            losses += (winners_array == 1)
-            tot_games += batch_size
 
 
             if torch.is_tensor(policy_loss):
@@ -177,7 +162,13 @@ def train_model(batches, batch_size):
                 optimizer.step()
 
             if batch % log_freq == 0 and batch > 0:
-                p1s, p2s = games.count_points()
+                p1s, p2s, winners_array = games.check_winners()
+                wins = winners_array.eq(0).sum()
+                losses = winners_array.eq(1).sum()
+                tot_games = winners_array.size(0)
+
+                win_rate = (wins.sum().item() / tot_games) * 100
+                loss_rate = (losses.sum().item() / tot_games) * 100
                 
                 end_time = perf_counter()
                 tot_time = end_time - start_time_total
@@ -190,13 +181,17 @@ def train_model(batches, batch_size):
                 loss_rate = (losses.sum().item() / tot_games) * 100
 
                 print(f"\n--- Batch {batch} ---")
-                print(f"Model Win Rate: {win_rate:.1f}%, Loss Rate: {loss_rate:.1f}%")
-                print(f"Avg Points (Model vs Random): {avg_p1:.1f} vs {avg_p2:.1f}")
+                print(f"Model Win Rate: {win_rate:.3f}%, Loss Rate: {loss_rate:.3f}%")
+                print(f"Avg Points (Model vs Random): {avg_p1:.3f} vs {avg_p2:.3f}")
                 print(f"Compute Speed: {round(games_per_second)} games/sec")
+
                 if torch.is_tensor(policy_loss):
-                    print(f"Policy Loss: {policy_loss.item():.4f}")
+                    print(f"Policy Loss: {policy_loss.item()*1000:.4f}")
                 
                 start_time_total = perf_counter()
+                wins = 0
+                losses = 0
+                tot_games = 0
 
             if batch % save_freq == 0 and batch > 0:
                 if save_results:
