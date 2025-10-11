@@ -7,12 +7,13 @@ import torch
 VALUES = {0:11, 1:0, 2:10, 3:0, 4:0, 5:0, 6:0, 7:2, 8:3, 9:4}  # Valori carte a briscola
 VALUES_TENSOR = torch.tensor([11,0,10,0,0,0,0,2,3,4]*4)
 
-LOOKUP_PATH = Path(__file__).resolve().with_name("lookup_tables.pt")
+LOOKUP_PATH = Path(__file__).resolve().parent / "utils" / "lookup_tables.pt"
+
 try:
     _lookup_payload = torch.load(LOOKUP_PATH)
     WINNER_TABLE = _lookup_payload["winner"].to(torch.int8)
 except FileNotFoundError:
-    from generate_lookup_tables import build_winner_table
+    from utils.generate_lookup_tables import build_winner_table
 
     WINNER_TABLE = build_winner_table().to(torch.int8)
     torch.save({"winner": WINNER_TABLE}, LOOKUP_PATH)

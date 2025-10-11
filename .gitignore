@@ -1,5 +1,4 @@
 __pycache__/
 .vs/
 misc/
-test.py
-models/
+src/scripts/training_models/*

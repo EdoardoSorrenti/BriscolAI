@@ -1,10 +1,10 @@
 import pygame, sys
-import game as game, random
+import game as game
 import torch
 from model import PolicyNetwork
 from utils import *
 
-model_path = 'model.pth'
+model_path = 'gui_models/model.pth'
 
 model = PolicyNetwork()
 model.load_state_dict(torch.load(model_path))
@@ -13,7 +13,7 @@ model.eval()
 """Test features"""
 SMALL_DECK = False
 WAITS = True
-CARTE_SCOPERTE = False
+CARTE_SCOPERTE = True
 HIDE_POINTS = False
 
 """Pygame parameters"""
@@ -33,8 +33,8 @@ def get_move(session, on_table = None, player_id = 0):
     with torch.no_grad():
         state = get_state(session, on_table = on_table, player_id=player_id)
         mask = get_action_mask(session, player_id=player_id)
-        logits = model(mask, state)
-        action_dist = torch.distributions.Categorical(logits=logits)
+        probs = model(state, mask)
+        action_dist = torch.distributions.Categorical(probs=probs)
         card = action_dist.sample().item()
         return card
 
@@ -47,7 +47,7 @@ class CardSprite(pygame.sprite.Sprite):
     def __init__(self, card, x , y, orizzontale = False):
         seed = seeds[card//10]
         super().__init__()
-        self.image = pygame.transform.smoothscale(pygame.image.load(f"imgs/{card % 10 + 1}{seed}.jpg").convert_alpha(), (CARD_WIDTH, CARD_HEIGHT))
+        self.image = pygame.transform.smoothscale(pygame.image.load(f"assets/{card % 10 + 1}{seed}.jpg").convert_alpha(), (CARD_WIDTH, CARD_HEIGHT))
         if orizzontale:
             self.image = pygame.transform.rotate(self.image, 90)
         self.rect = self.image.get_rect(topleft=(x, y))

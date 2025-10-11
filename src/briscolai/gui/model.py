@@ -10,18 +10,25 @@ The state is represented by a 200-element boolean tensor:
 - 40 elements for the card on the table (onehot)
 """
 INPUT_SIZE = 40 + 40 + 40 + 40 + 40 
-HIDDEN_SIZE = 128
+HIDDEN_SIZE = 512
 OUTPUT_SIZE = 40
 
 class PolicyNetwork(nn.Module):
     def __init__(self):
         super(PolicyNetwork, self).__init__()
-        self.fc1 = nn.Linear(INPUT_SIZE, HIDDEN_SIZE)
-        self.activation = nn.GELU()
-        self.fc2 = nn.Linear(HIDDEN_SIZE, OUTPUT_SIZE)
+        self.activation = nn.ReLU()
+        self.fc1 = nn.Linear(INPUT_SIZE, 512)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc3 = nn.Linear(256, 128)
+        self.fc4 = nn.Linear(128, OUTPUT_SIZE)
+        self.softmax = nn.Softmax(dim=-1)
 
-    def forward(self, mask, x):
+
+    def forward(self, x, mask):
         x = self.activation(self.fc1(x))
-        x = self.fc2(x)
+        x = self.activation(self.fc2(x))
+        x = self.activation(self.fc3(x))
+        x = self.fc4(x)
         x = x.masked_fill(~mask, float('-inf'))
+        x = self.softmax(x)
         return x

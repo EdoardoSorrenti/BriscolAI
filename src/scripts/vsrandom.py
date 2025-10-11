@@ -1,6 +1,6 @@
 from time import perf_counter
 import torch
-from config import *
+from trainconfig import *
 
 
 torch.set_default_device(device)
