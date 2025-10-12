@@ -2,3 +2,16 @@ __pycache__/
 .vs/
 misc/
 src/scripts/training_models/*
+src/scripts/logs/*
+logs/
+*.log
+.env
+.venv/
+venv/
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+**/.DS_Store
+models/*.tmp
+models/*.ckpt

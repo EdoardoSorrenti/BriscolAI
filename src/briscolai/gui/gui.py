@@ -4,7 +4,7 @@ import torch
 from model import PolicyNetwork
 from utils import *
 
-model_path = 'gui_models/model.pth'
+model_path = 'gui_weights/model.pth'
 
 model = PolicyNetwork()
 model.load_state_dict(torch.load(model_path))
@@ -13,7 +13,7 @@ model.eval()
 """Test features"""
 SMALL_DECK = False
 WAITS = True
-CARTE_SCOPERTE = True
+CARTE_SCOPERTE = False
 HIDE_POINTS = False
 
 """Pygame parameters"""
@@ -67,6 +67,9 @@ class CardSprite(pygame.sprite.Sprite):
 
         self.image = result
 
+    def make_transparent(self):
+        self.image.set_alpha(150)
+
 def drawCards(hand, enemy_hand):
     hand_sprites = []
     enemy_hand_sprites = []
@@ -114,6 +117,9 @@ while running:
         screen.blit(font.render(f"P2: {score2} pts", True, (255,255,255)), (50,20))
         screen.blit(font.render(f"P1: {score1} pts", True, (255,255,255)), (50,SCREEN_HEIGHT-50))
 
+    if len(session.deck) > 0:
+        screen.blit(font.render(f"{len(session.deck)}", True, (255,255,255)), (SCREEN_WIDTH-100,200))
+
     if (session.turno == 1 or card1 != None) and card2 == None:
         card2 = get_move(session, on_table=card1, player_id=1)
         index = session.hands[1].index(card2)
@@ -150,8 +156,9 @@ while running:
     for card_sprite in enemy_hand:
         screen.blit(card_sprite.image, card_sprite.rect.topleft)
 
-    if len(session.deck) >= 1:
-        screen.blit(briscola.image, briscola.rect.topleft)
+    if len(session.deck) <= 1:
+        briscola.make_transparent()
+    screen.blit(briscola.image, briscola.rect.topleft)
     
     if len(session.deck) >= 2:
         screen.blit(turned_card.image, turned_card.rect.topleft)

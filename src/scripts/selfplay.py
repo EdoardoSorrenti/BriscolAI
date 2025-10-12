@@ -132,7 +132,7 @@ def get_action_masks(session, player_id=0):
 
 
 def get_moves(session, model, player_id=0, mask=None):
-    """Returns a move for the current player using the provided model."""
+    """Returns a move and associated statistics for the current player."""
     states = get_states(session, player_id)
     masks = get_action_masks(session, player_id)
 
@@ -145,7 +145,8 @@ def get_moves(session, model, player_id=0, mask=None):
     actions = torch.multinomial(probs_fp32, 1).squeeze(1)
     selected_probs = probs_fp32.gather(1, actions.unsqueeze(1)).squeeze(1)
     log_probs = selected_probs.clamp_min(1e-12).log()
-    return actions, log_probs.to(probs.dtype)
+    entropy = -(probs_fp32 * probs_fp32.clamp_min(1e-12).log()).sum(dim=1)
+    return actions, log_probs.to(probs.dtype), entropy.to(probs.dtype)
 
 
 def tensorloop_model_vs_model(games, model_train, model_eval, collect_log_probs=True):
@@ -153,6 +154,11 @@ def tensorloop_model_vs_model(games, model_train, model_eval, collect_log_probs=
     n_games = games.N
     device = games.hands.device
     log_prob_sums = (
+        torch.zeros(n_games, device=device, dtype=torch.float32)
+        if collect_log_probs
+        else None
+    )
+    entropy_sums = (
         torch.zeros(n_games, device=device, dtype=torch.float32)
         if collect_log_probs
         else None
@@ -167,27 +173,29 @@ def tensorloop_model_vs_model(games, model_train, model_eval, collect_log_probs=
 
         # Model player (P0) leads
         if turn0_idx.numel():
-            actions0, log_probs0 = get_moves(games, model_train, player_id=0, mask=turn0_mask)
+            actions0, log_probs0, entropy0 = get_moves(games, model_train, player_id=0, mask=turn0_mask)
             card1.index_copy_(0, turn0_idx, actions0)
             games.place_on_table(turn0_idx, actions0)
             if collect_log_probs:
                 log_prob_sums.index_add_(0, turn0_idx, log_probs0.to(torch.float32))
+                entropy_sums.index_add_(0, turn0_idx, entropy0.to(torch.float32))
 
             with torch.no_grad():
-                actions_eval, _ = get_moves(games, model_eval, player_id=1, mask=turn0_mask)
+                actions_eval, _, _ = get_moves(games, model_eval, player_id=1, mask=turn0_mask)
             card2.index_copy_(0, turn0_idx, actions_eval)
 
         # Evaluation player (P1) leads
         if turn1_idx.numel():
             with torch.no_grad():
-                actions_eval, _ = get_moves(games, model_eval, player_id=1, mask=turn1_mask)
+                actions_eval, _, _ = get_moves(games, model_eval, player_id=1, mask=turn1_mask)
             card2.index_copy_(0, turn1_idx, actions_eval)
             games.place_on_table(turn1_idx, actions_eval)
 
-            actions1, log_probs1 = get_moves(games, model_train, player_id=0, mask=turn1_mask)
+            actions1, log_probs1, entropy1 = get_moves(games, model_train, player_id=0, mask=turn1_mask)
             card1.index_copy_(0, turn1_idx, actions1)
             if collect_log_probs:
                 log_prob_sums.index_add_(0, turn1_idx, log_probs1.to(torch.float32))
+                entropy_sums.index_add_(0, turn1_idx, entropy1.to(torch.float32))
 
         games.remove_played_cards(card1, card2)
         winners = games.compare_cards(card1, card2)
@@ -204,9 +212,11 @@ def tensorloop_model_vs_model(games, model_train, model_eval, collect_log_probs=
 
     if collect_log_probs:
         policy_losses = -log_prob_sums * rewards.to(torch.float32)
-        return policy_losses.mean(), winners
+        entropy_mean = entropy_sums.mean()
+        return policy_losses.mean(), entropy_mean, winners
 
-    return torch.zeros((), device=rewards.device, dtype=rewards.dtype), winners
+    zero = torch.zeros((), device=rewards.device, dtype=rewards.dtype)
+    return zero, zero, winners
 
 
 def tensorloop_model_vs_random(games, model_train, collect_log_probs=False):
@@ -214,6 +224,11 @@ def tensorloop_model_vs_random(games, model_train, collect_log_probs=False):
     n_games = games.N
     device = games.hands.device
     log_prob_sums = (
+        torch.zeros(n_games, device=device, dtype=torch.float32)
+        if collect_log_probs
+        else None
+    )
+    entropy_sums = (
         torch.zeros(n_games, device=device, dtype=torch.float32)
         if collect_log_probs
         else None
@@ -227,11 +242,12 @@ def tensorloop_model_vs_random(games, model_train, collect_log_probs=False):
         games.refresh_random_buffer()
 
         if turn0_idx.numel():
-            actions0, log_probs0 = get_moves(games, model_train, player_id=0, mask=turn0_mask)
+            actions0, log_probs0, entropy0 = get_moves(games, model_train, player_id=0, mask=turn0_mask)
             card1.index_copy_(0, turn0_idx, actions0)
             games.place_on_table(turn0_idx, actions0)
             if collect_log_probs:
                 log_prob_sums.index_add_(0, turn0_idx, log_probs0.to(torch.float32))
+                entropy_sums.index_add_(0, turn0_idx, entropy0.to(torch.float32))
 
             card2_turn0 = games.pick_random_cards(player_id=1, indices=turn0_idx)
             card2.index_copy_(0, turn0_idx, card2_turn0)
@@ -241,10 +257,11 @@ def tensorloop_model_vs_random(games, model_train, collect_log_probs=False):
             card2.index_copy_(0, turn1_idx, card2_turn1)
             games.place_on_table(turn1_idx, card2_turn1)
 
-            actions1, log_probs1 = get_moves(games, model_train, player_id=0, mask=turn1_mask)
+            actions1, log_probs1, entropy1 = get_moves(games, model_train, player_id=0, mask=turn1_mask)
             card1.index_copy_(0, turn1_idx, actions1)
             if collect_log_probs:
                 log_prob_sums.index_add_(0, turn1_idx, log_probs1.to(torch.float32))
+                entropy_sums.index_add_(0, turn1_idx, entropy1.to(torch.float32))
 
         games.remove_played_cards(card1, card2)
         winners = games.compare_cards(card1, card2)
@@ -261,9 +278,11 @@ def tensorloop_model_vs_random(games, model_train, collect_log_probs=False):
 
     if collect_log_probs:
         policy_losses = -log_prob_sums * rewards.to(torch.float32)
-        return policy_losses.mean(), winners
+        entropy_mean = entropy_sums.mean()
+        return policy_losses.mean(), entropy_mean, winners
 
-    return torch.zeros((), device=rewards.device, dtype=rewards.dtype), winners
+    zero = torch.zeros((), device=rewards.device, dtype=rewards.dtype)
+    return zero, zero, winners
 
 
 def evaluate_models(eval_games, candidate_model, reference_model, eval_batches):
@@ -280,13 +299,13 @@ def evaluate_models(eval_games, candidate_model, reference_model, eval_batches):
     with torch.no_grad():
         for _ in range(eval_batches):
             eval_games.reset()
-            _, winners = tensorloop_model_vs_model(eval_games, candidate_model, reference_model, collect_log_probs=False)
+            _, _, winners = tensorloop_model_vs_model(eval_games, candidate_model, reference_model, collect_log_probs=False)
             baseline_wins += winners.eq(0).sum().item()
             baseline_total += winners.numel() - winners.eq(2).sum().item()
 
         for _ in range(eval_batches):
             eval_games.reset()
-            _, winners = tensorloop_model_vs_random(eval_games, candidate_model, collect_log_probs=False)
+            _, _, winners = tensorloop_model_vs_random(eval_games, candidate_model, collect_log_probs=False)
             random_wins += winners.eq(0).sum().item()
             random_total += winners.numel() - winners.eq(2).sum().item()
 
@@ -332,10 +351,17 @@ def train_self_play(total_batches, batch_size):
             optimizer.zero_grad()
             games.reset()
 
-            policy_loss, winners_array = tensorloop_model_vs_model(games, train_model, eval_model, collect_log_probs=True)
+            policy_loss, entropy_mean, winners_array = tensorloop_model_vs_model(
+                games,
+                train_model,
+                eval_model,
+                collect_log_probs=True,
+            )
 
+            total_loss = None
             if torch.is_tensor(policy_loss):
-                policy_loss.backward()
+                total_loss = policy_loss - entropy_coef * entropy_mean
+                total_loss.backward()
                 optimizer.step()
 
             if batch % log_freq == 0 and batch > 0:
@@ -361,7 +387,9 @@ def train_self_play(total_batches, batch_size):
                     "  Loss Rate: %.3f%%\n"
                     "  Avg Points: %.3f vs %.3f\n"
                     "  Speed:     %.0f games/sec\n"
-                    "  Loss:      %.4f",
+                    "  Loss:      %.4f\n"
+                    "  Entropy:   %.4f\n"
+                    "  Total:     %.4f",
                     batch,
                     win_rate,
                     loss_rate,
@@ -369,10 +397,17 @@ def train_self_play(total_batches, batch_size):
                     avg_p2,
                     games_per_second,
                     policy_loss.item() if torch.is_tensor(policy_loss) else float('nan'),
+                    entropy_mean.item() if torch.is_tensor(entropy_mean) else float('nan'),
+                    total_loss.item() if torch.is_tensor(total_loss) else float('nan'),
                 )
 
                 if torch.is_tensor(policy_loss):
-                    logger.debug("Policy loss (x1e3): %.4f", policy_loss.item() * 1000)
+                    logger.debug(
+                        "Policy loss (x1e3): %.4f | Entropy mean: %.4f | Total loss: %.4f",
+                        policy_loss.item() * 1000,
+                        entropy_mean.item(),
+                        total_loss.item() if torch.is_tensor(total_loss) else float('nan'),
+                    )
 
                 start_time_total = perf_counter()
                 wins = 0
