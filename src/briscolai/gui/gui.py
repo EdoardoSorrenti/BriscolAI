@@ -4,7 +4,7 @@ import torch
 from model import PolicyNetwork
 from utils import *
 
-model_path = 'gui_weights/model.pth'
+model_path = 'weights/model.pth'
 
 model = PolicyNetwork()
 model.load_state_dict(torch.load(model_path))
@@ -13,7 +13,7 @@ model.eval()
 """Test features"""
 SMALL_DECK = False
 WAITS = True
-CARTE_SCOPERTE = False
+CARTE_SCOPERTE = True
 HIDE_POINTS = False
 
 """Pygame parameters"""
@@ -130,6 +130,8 @@ while running:
 
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN and card1 == None:
+            if event.key == pygame.K_a:
+                    CARTE_SCOPERTE = not CARTE_SCOPERTE
             if card1 == None:
                 if event.key == pygame.K_1:
                     card1 = session.hands[0].pop(0)

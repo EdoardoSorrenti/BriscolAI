@@ -367,11 +367,10 @@ def train_self_play(total_batches, batch_size):
             if batch % log_freq == 0 and batch > 0:
                 p1s, p2s, winners_array = games.check_winners()
                 wins = winners_array.eq(0).sum()
-                losses = winners_array.eq(1).sum()
+                draws = winners_array.eq(2).sum()
                 tot_games = winners_array.size(0)
 
-                win_rate = (wins.sum().item() / tot_games) * 100
-                loss_rate = (losses.sum().item() / tot_games) * 100
+                win_rate = (wins.sum().item() / (tot_games-draws.sum().item())) * 100
 
                 end_time = perf_counter()
                 tot_time = end_time - start_time_total
@@ -384,7 +383,6 @@ def train_self_play(total_batches, batch_size):
                 logger.info(
                     "Batch %d\n"
                     "  Win Rate:  %.3f%%\n"
-                    "  Loss Rate: %.3f%%\n"
                     "  Avg Points: %.3f vs %.3f\n"
                     "  Speed:     %.0f games/sec\n"
                     "  Loss:      %.4f\n"
@@ -392,7 +390,6 @@ def train_self_play(total_batches, batch_size):
                     "  Total:     %.4f",
                     batch,
                     win_rate,
-                    loss_rate,
                     avg_p1,
                     avg_p2,
                     games_per_second,
@@ -411,7 +408,6 @@ def train_self_play(total_batches, batch_size):
 
                 start_time_total = perf_counter()
                 wins = 0
-                losses = 0
                 tot_games = 0
 
             if batch % save_freq == 0 and batch > 0:

@@ -85,10 +85,10 @@ class Games:
     def compare_cards(self, idx1, idx2):
         """Return winners (0 if player 1 wins, 1 if player 2 wins) for each game."""
         winners = self.winner_table[
-            self.briscole.long(),
-            self.player2_starts.long(),
-            idx1.long(),
-            idx2.long(),
+            self.briscole.to(torch.int32),
+            self.player2_starts.to(torch.int32),
+            idx1.to(torch.int32),
+            idx2.to(torch.int32),
         ]
         self.trick_winners.copy_(winners)
         self.player2_starts.copy_(self.trick_winners.bool())
