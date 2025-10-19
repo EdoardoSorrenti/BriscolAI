@@ -12,7 +12,7 @@ model.load_state_dict(torch.load(model_path))
 model.eval()
 
 """Test features"""
-SMALL_DECK = False
+SMALL_DECK = True
 WAITS = True
 CARTE_SCOPERTE = True
 HIDE_POINTS = False

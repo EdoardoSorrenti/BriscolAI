@@ -14,8 +14,10 @@ WINNER_TABLE = _lookup_payload["winner"].to(torch.int8)
 
 
 def evaluate(card1, card2, briscola, player2_starts):
-    winner = WINNER_TABLE[briscola, player2_starts, card1, card2].item()
-    return winner
+    relative_winner = WINNER_TABLE[briscola, player2_starts, card1, card2].item()
+    if relative_winner == 0:
+        return player2_starts
+    return 1 - player2_starts
 
 def get_points(card1, card2):
     return VALUES_PER_CARD[card1].item() + VALUES_PER_CARD[card2].item()
