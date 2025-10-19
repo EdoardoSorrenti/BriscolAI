@@ -3,6 +3,7 @@ import game as game
 import torch
 from model import PolicyNetwork
 from utils import *
+from scripts.minmax import minmax
 
 model_path = 'weights/model.pth'
 
@@ -30,6 +31,15 @@ HIDDEN_CARD = 49
 
 def get_move(session, on_table = None, player_id = 0):
     """Produce valid randomized moves."""
+    if len(session.deck) == 0:
+        hands = [session.hands[0][:], session.hands[1][:]]
+        score1, score2 = session.count_points()
+        points_diff = score1 - score2
+        briscola_seed = session.briscola // 10
+        starting_player = player_id if on_table is None else session.turno
+        card = minmax(hands, briscola_seed, starting_player, ontable=on_table, points=points_diff)
+        return card
+
     with torch.no_grad():
         state = get_state(session, on_table = on_table, player_id=player_id)
         mask = get_action_mask(session, player_id=player_id)
